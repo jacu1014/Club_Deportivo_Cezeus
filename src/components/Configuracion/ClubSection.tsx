@@ -157,7 +157,8 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
         </div>
 
         {/* DERECHA: TARIFAS */}
-        <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
+   {/* DERECHA: TARIFAS */}
+<div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
   <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
     <span className="material-symbols-outlined text-primary">payments</span> Tarifas Globales
   </h3>
@@ -165,8 +166,8 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
   <div className="space-y-4">
     {tarifas.length > 0 ? tarifas.map((t) => (
       <div key={t.id} className="relative group">
-        {/* Signo de pesos posicionado sobre el input */}
-        <span className="absolute left-4 bottom-[14px] text-primary font-black text-xs z-10">
+        {/* Signo de pesos ajustado: pointer-events-none es vital */}
+        <span className="absolute left-4 bottom-[13px] text-primary font-black text-[11px] z-20 pointer-events-none">
           $
         </span>
         
@@ -174,8 +175,9 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
           label={t.nombre_tarifa} 
           value={t.valor.toString()} 
           onChange={(val) => handleUpdateTarifa(t.id, Number(val))}
-          // Si tu ConfigInput acepta className, podrías pasarle un padding-left extra:
-          // className="pl-8" 
+          // IMPORTANTE: pl-9 (padding-left) empuja el texto para que no choque con el $
+          // ! importante asegura que sobreescriba estilos internos
+          className="!pl-9" 
         />
       </div>
     )) : (

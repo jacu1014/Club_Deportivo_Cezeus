@@ -15,14 +15,16 @@ export const TabButton = ({ active, onClick, icon, label }: any) => (
   </button>
 );
 
-export const ConfigInput = ({ label, value, disabled = false }: any) => (
+// ACTUALIZADO: Ahora acepta onChange y className
+export const ConfigInput = ({ label, value, onChange, disabled = false, className = "" }: any) => (
   <div className="space-y-2">
     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">{label}</label>
     <input 
       type="text" 
-      defaultValue={value} 
+      value={value} // Cambiado de defaultValue a value para que sea un componente controlado
+      onChange={(e) => onChange && onChange(e.target.value)} // Añadido el evento de cambio
       disabled={disabled}
-      className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40 transition-all disabled:opacity-30 disabled:cursor-not-allowed font-medium"
+      className={`w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/40 transition-all disabled:opacity-30 disabled:cursor-not-allowed font-medium ${className}`}
     />
   </div>
 );
