@@ -114,39 +114,39 @@ const PagosModule = ({ user }: { user: any }) => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-[#020617] min-h-screen text-white relative">
+    <div className="p-4 md:p-6 space-y-6 bg-[#020617] min-h-screen text-white relative">
       
-      {/* TOASTS */}
-      <div className="fixed top-6 right-6 z-[100] space-y-3">
+      {/* TOASTS: Ajustados para móvil */}
+      <div className="fixed top-4 right-4 left-4 md:left-auto md:top-6 md:right-6 z-[100] space-y-3">
         {toasts.map(t => (
-          <div key={t.id} className={`flex items-center gap-3 px-6 py-4 rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300 ${t.tipo === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-            <span className="material-symbols-outlined">{t.tipo === 'success' ? 'check_circle' : 'error'}</span>
-            <span className="text-[10px] font-black uppercase tracking-widest">{t.mensaje}</span>
+          <div key={t.id} className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300 ${t.tipo === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+            <span className="material-symbols-outlined text-sm md:text-base">{t.tipo === 'success' ? 'check_circle' : 'error'}</span>
+            <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">{t.mensaje}</span>
           </div>
         ))}
       </div>
 
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+      {/* HEADER: Stack vertical en móvil, horizontal en escritorio */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black italic tracking-tighter text-primary uppercase">PAGOS</h1>
-          <p className="text-slate-500 text-[10px] font-bold tracking-[0.3em] uppercase">Gestión de flujos y estados</p>
+          <h1 className="text-2xl md:text-3xl font-black italic tracking-tighter text-primary uppercase">PAGOS</h1>
+          <p className="text-slate-500 text-[8px] md:text-[10px] font-bold tracking-[0.3em] uppercase">Gestión de flujos y estados</p>
         </div>
         
         {['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(userRol) && (
           <button 
             onClick={() => { setPagoAEditar(null); setMostrarModal(true); }} 
-            className="bg-primary text-black px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg flex items-center gap-2"
+            className="w-full sm:w-auto bg-primary text-black px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg flex justify-center items-center gap-2"
           >
-            <span className="material-symbols-outlined">add_circle</span> Nuevo Movimiento
+            <span className="material-symbols-outlined text-sm md:text-base">add_circle</span> Nuevo Movimiento
           </button>
         )}
       </div>
 
-      {/* DASHBOARD: Ahora recibe los DATOS FILTRADOS */}
+      {/* DASHBOARD */}
       <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
 
-      {/* TABLA: Ahora recibe los filtros y la función para cambiarlos */}
+      {/* TABLA */}
       <FinanceTable 
         datosOriginales={datos}
         datosFiltrados={datosFiltrados} 
@@ -167,7 +167,7 @@ const PagosModule = ({ user }: { user: any }) => {
 
       {loading && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div>
+          <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-2 border-primary"></div>
         </div>
       )}
     </div>

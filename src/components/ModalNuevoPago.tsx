@@ -6,7 +6,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  editData?: any; // Añadido para soportar edición
+  editData?: any;
 }
 
 const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
@@ -30,7 +30,6 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
   useEffect(() => {
     if (isOpen) {
       if (editData) {
-        // Si estamos editando, precargamos los datos
         setFormData({
           monto: editData.monto.toString(),
           categoria: editData.categoria,
@@ -41,7 +40,6 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
         });
         setUsuarioSeleccionado(editData.usuarios);
       } else {
-        // Si es nuevo, reseteamos
         setFormData(initialFormState);
         setUsuarioSeleccionado(null);
       }
@@ -72,16 +70,23 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
     return () => clearTimeout(timer);
   }, [busquedaUsuario]);
 
-  // --- PROCESO DE BASE DE DATOS (ACTUALIZADO) ---
+  // --- PROCESO DE BASE DE DATOS ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validaciones preventivas
     if (!usuarioSeleccionado) return alert("Debes seleccionar un usuario");
+    
+    const montoNumerico = parseFloat(formData.monto);
+    if (isNaN(montoNumerico) || montoNumerico <= 0) {
+      return alert("El monto debe ser un número mayor a cero");
+    }
 
     setLoading(true);
     
     const payload = {
       usuario_id: usuarioSeleccionado.id,
-      monto: parseFloat(formData.monto),
+      monto: montoNumerico,
       categoria: formData.categoria,
       concepto: formData.concepto,
       metodo_pago: formData.metodo_pago,
@@ -91,22 +96,13 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
 
     try {
       let result;
-      
       if (editData) {
-        // ACTUALIZAR REGISTRO EXISTENTE
-        result = await supabase
-          .from('pagos')
-          .update(payload)
-          .eq('id', editData.id);
+        result = await supabase.from('pagos').update(payload).eq('id', editData.id);
       } else {
-        // INSERTAR NUEVO REGISTRO
-        result = await supabase
-          .from('pagos')
-          .insert([payload]);
+        result = await supabase.from('pagos').insert([payload]);
       }
 
       if (result.error) throw result.error;
-
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -120,14 +116,18 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#0a0f18] border border-white/10 w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl">
-        <div className="p-8">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4">
+      
+      <div className="bg-[#0a0f18] border border-white/10 w-full max-w-lg rounded-t-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+        
+        {/* Usamos custom-scrollbar para el estilo que definimos antes */}
+        <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar">
+          
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-black italic text-primary uppercase tracking-tighter">
+            <h2 className="text-xl sm:text-2xl font-black italic text-primary uppercase tracking-tighter">
               {editData ? 'Editar Movimiento' : 'Nuevo Movimiento'}
             </h2>
-            <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition-colors">
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -138,25 +138,25 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-2">Asignar Usuario</label>
               {usuarioSeleccionado ? (
                 <div className="flex justify-between items-center bg-primary/10 border border-primary/30 p-4 rounded-2xl">
-                  <span className="text-sm font-bold text-primary uppercase">
+                  <span className="text-xs sm:text-sm font-bold text-primary uppercase">
                     {usuarioSeleccionado.primer_nombre} {usuarioSeleccionado.primer_apellido}
                   </span>
-                  <button type="button" onClick={() => setUsuarioSeleccionado(null)} className="text-primary hover:scale-110">
+                  <button type="button" onClick={() => setUsuarioSeleccionado(null)} className="text-primary hover:scale-110 p-1">
                     <span className="material-symbols-outlined text-sm">edit</span>
                   </button>
                 </div>
               ) : (
                 <input
                   type="text"
-                  placeholder="BUSCAR POR NOMBRE O DOCUMENTO..."
-                  className="w-full bg-[#020617] border border-white/10 p-4 rounded-2xl text-xs font-bold text-white outline-none focus:border-primary uppercase"
+                  placeholder="BUSCAR NOMBRE O DOCUMENTO..."
+                  className="w-full bg-[#020617] border border-white/10 p-4 rounded-2xl text-[11px] font-bold text-white outline-none focus:border-primary uppercase"
                   value={busquedaUsuario}
                   onChange={(e) => setBusquedaUsuario(e.target.value)}
                 />
               )}
               
               {usuariosFiltrados.length > 0 && !usuarioSeleccionado && (
-                <div className="absolute z-10 w-full mt-2 bg-[#161b26] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+                <div className="absolute z-20 w-full mt-2 bg-[#161b26] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
                   {usuariosFiltrados.map(u => (
                     <button
                       key={u.id}
@@ -164,8 +164,8 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
                       onClick={() => setUsuarioSeleccionado(u)}
                       className="w-full p-4 text-left hover:bg-primary hover:text-black transition-colors border-b border-white/5 last:border-0"
                     >
-                      <p className="text-xs font-black uppercase">
-                        {u.primer_nombre} {u.segundo_nombre || ''} {u.primer_apellido} {u.segundo_apellido || ''}
+                      <p className="text-[10px] font-black uppercase">
+                        {u.primer_nombre} {u.primer_apellido}
                       </p>
                       <p className="text-[9px] opacity-70">DOC: {u.numero_documento}</p>
                     </button>
@@ -174,11 +174,12 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-2">Monto ($)</label>
                 <input
                   type="number"
+                  step="0.01"
                   required
                   className="w-full bg-[#020617] border border-white/10 p-4 rounded-2xl text-xs font-bold text-white outline-none focus:border-primary"
                   value={formData.monto}
@@ -197,7 +198,7 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-2">Categoría</label>
                 <select
@@ -242,13 +243,13 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-2">Estado del Movimiento</label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {OPCIONES_ESTADO_PAGO.map((estado) => (
                   <button
                     key={estado}
                     type="button"
                     onClick={() => setFormData({ ...formData, estado_pago: estado })}
-                    className={`flex-1 p-3 rounded-xl text-[10px] font-black transition-all border ${
+                    className={`flex-1 min-w-[80px] p-3 rounded-xl text-[10px] font-black transition-all border ${
                       formData.estado_pago === estado
                         ? 'bg-primary border-primary text-black'
                         : 'bg-white/5 border-white/10 text-slate-500 hover:border-white/20'
@@ -263,7 +264,7 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary text-black font-black uppercase tracking-widest p-5 rounded-2xl mt-4 hover:scale-[1.02] transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
+              className="w-full bg-primary text-black font-black uppercase tracking-widest p-4 sm:p-5 rounded-2xl mt-4 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20 text-xs sm:text-base"
             >
               {loading ? 'PROCESANDO...' : editData ? 'ACTUALIZAR MOVIMIENTO' : 'REGISTRAR MOVIMIENTO'}
             </button>

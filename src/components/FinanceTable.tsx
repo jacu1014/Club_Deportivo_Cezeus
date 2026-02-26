@@ -111,78 +111,77 @@ const FinanceTable = ({
     });
   };
 
-  // Verificación de roles para filtros administrativos
   const esAdmin = ['ADMINISTRATIVO', 'DIRECTOR', 'SUPER_ADMIN'].includes(userRol);
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end px-2">
+      {/* HEADER TABLA */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2 px-2">
         <h2 className="text-[10px] font-black tracking-[0.3em] text-slate-500 uppercase">Historial Transaccional</h2>
         <button onClick={exportarExcel} className="flex items-center gap-2 text-[10px] font-black text-primary hover:scale-105 transition-all uppercase tracking-widest">
           <span className="material-symbols-outlined text-sm">download</span> Exportar Excel
         </button>
       </div>
 
-      <div className="bg-[#0a0f18] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-white/5 space-y-4 bg-white/[0.01]">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex-1 min-w-[300px] relative">
+      <div className="bg-[#0a0f18] rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+        {/* FILTROS */}
+        <div className="p-4 md:p-6 border-b border-white/5 space-y-4 bg-white/[0.01]">
+          <div className="grid grid-cols-1 lg:flex lg:flex-wrap gap-3 items-center">
+            <div className="flex-1 relative">
               <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">search</span>
               <input 
-                type="text" placeholder="BUSCAR POR NOMBRE, DOCUMENTO O CONCEPTO..." 
+                type="text" placeholder="BUSCAR POR NOMBRE, DOC O CONCEPTO..." 
                 value={filtros.busqueda}
                 onChange={(e) => updateFiltro('busqueda', e.target.value)}
-                className="w-full bg-[#020617] border border-white/10 pl-12 pr-4 py-3 rounded-xl text-[10px] font-black text-white outline-none focus:border-primary uppercase transition-all"
+                className="w-full bg-[#020617] border border-white/10 pl-11 pr-4 py-3 rounded-xl text-[10px] font-black text-white outline-none focus:border-primary uppercase transition-all"
               />
             </div>
-            <div className="flex items-center bg-[#020617] border border-white/10 rounded-xl px-3">
-              <span className="material-symbols-outlined text-slate-500 text-sm mr-2">calendar_today</span>
-              <input 
-                type="date" 
-                value={filtros.fechaEspecifica} 
-                onChange={(e) => updateFiltro('fechaEspecifica', e.target.value)} 
-                className="bg-transparent py-3 text-[10px] font-black text-primary outline-none uppercase cursor-pointer" 
-              />
+            <div className="flex gap-2">
+              <div className="flex-1 flex items-center bg-[#020617] border border-white/10 rounded-xl px-3 h-[42px]">
+                <span className="material-symbols-outlined text-slate-500 text-sm mr-2">calendar_today</span>
+                <input 
+                  type="date" 
+                  value={filtros.fechaEspecifica} 
+                  onChange={(e) => updateFiltro('fechaEspecifica', e.target.value)} 
+                  className="bg-transparent text-[10px] font-black text-primary outline-none uppercase cursor-pointer w-full" 
+                />
+              </div>
+              <button 
+                onClick={limpiarFiltros} 
+                className="bg-white/5 border border-white/10 px-4 rounded-xl hover:bg-rose-500/20 hover:text-rose-500 text-slate-400 transition-all flex items-center"
+              >
+                <span className="material-symbols-outlined text-sm">filter_alt_off</span>
+              </button>
             </div>
-            <button 
-              onClick={limpiarFiltros} 
-              className="bg-white/5 border border-white/10 p-3 rounded-xl hover:bg-rose-500/20 hover:text-rose-500 text-slate-400 transition-all"
-            >
-              <span className="material-symbols-outlined text-sm">filter_alt_off</span>
-            </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {/* Filtros básicos para todos */}
-            <select value={filtros.mes || ""} onChange={(e) => updateFiltro('mes', e.target.value ? Number(e.target.value) : null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase">
-              <option value="">Mes (Todos)</option>
-              {Array.from({ length: 12 }, (_, i) => <option key={i+1} value={i+1}>{new Intl.DateTimeFormat('es', { month: 'long' }).format(new Date(2026, i)).toUpperCase()}</option>)}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+            <select value={filtros.mes || ""} onChange={(e) => updateFiltro('mes', e.target.value ? Number(e.target.value) : null)} className="bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase appearance-none text-center">
+              <option value="">Mes</option>
+              {Array.from({ length: 12 }, (_, i) => <option key={i+1} value={i+1}>{new Intl.DateTimeFormat('es', { month: 'short' }).format(new Date(2026, i)).toUpperCase()}</option>)}
             </select>
-            <select value={filtros.anio || ""} onChange={(e) => updateFiltro('anio', e.target.value ? Number(e.target.value) : null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-primary outline-none">
+            <select value={filtros.anio || ""} onChange={(e) => updateFiltro('anio', e.target.value ? Number(e.target.value) : null)} className="bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-primary outline-none text-center">
               <option value="">Año</option>
               {opcionesDeAnios.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
             
-            <select value={filtros.metodo || ""} onChange={(e) => updateFiltro('metodo', e.target.value || null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase cursor-pointer">
+            <select value={filtros.metodo || ""} onChange={(e) => updateFiltro('metodo', e.target.value || null)} className="col-span-2 sm:col-auto bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase cursor-pointer">
                <option value="">Medio de Pago</option>
                {METODOS_PAGO.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
             </select>
 
-            {/* Filtros Administrativos (Solo Super Admin, Admin, Director) */}
             {esAdmin && (
               <>
-                <select value={filtros.categoria || ""} onChange={(e) => updateFiltro('categoria', e.target.value || null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase cursor-pointer">
+                <select value={filtros.categoria || ""} onChange={(e) => updateFiltro('categoria', e.target.value || null)} className="bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-primary outline-none uppercase cursor-pointer">
                    <option value="">Categoría</option>
                    {Object.values(CATEGORIAS_FINANZAS).flat().map(cat => <option key={cat} value={cat}>{cat.toUpperCase()}</option>)}
                 </select>
-                <select value={filtros.tipo || ""} onChange={(e) => updateFiltro('tipo', e.target.value || null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-primary outline-none">
-                  <option value="">Flujo (Ambos)</option>
-                  <option value="INGRESO">SÓLO INGRESOS</option>
-                  <option value="EGRESO">SÓLO EGRESOS</option>
+                <select value={filtros.tipo || ""} onChange={(e) => updateFiltro('tipo', e.target.value || null)} className="bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-primary outline-none">
+                  <option value="">Flujo</option>
+                  <option value="INGRESO">INGRESOS</option>
+                  <option value="EGRESO">EGRESOS</option>
                 </select>
-
-                {/* NUEVO: Filtro por Estado (Visible para todos) */}
-                <select value={filtros.estado || ""} onChange={(e) => updateFiltro('estado', e.target.value || null)} className="bg-[#020617] border border-white/10 px-4 py-2 rounded-lg text-[9px] font-black text-emerald-400 outline-none uppercase cursor-pointer">
+                <select value={filtros.estado || ""} onChange={(e) => updateFiltro('estado', e.target.value || null)} className="col-span-2 sm:col-auto bg-[#020617] border border-white/10 px-3 py-2 rounded-lg text-[9px] font-black text-emerald-400 outline-none uppercase cursor-pointer">
                   <option value="">Estado de Pago</option>
                   <option value="PAGADO">PAGADO</option>
                   <option value="PENDIENTE">PENDIENTE</option>
@@ -192,8 +191,8 @@ const FinanceTable = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          {/* ... Resto de la tabla (thead y tbody) se mantiene igual ... */}
+        {/* VISTA DE TABLA (ESCRITORIO) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-[11px]">
             <thead className="bg-white/5 text-slate-500 font-black uppercase tracking-widest">
               <tr>
@@ -254,39 +253,96 @@ const FinanceTable = ({
                     <td className="p-5 text-center">
                       <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {puedeEditar && (
-                          <button 
-                            onClick={() => onEdit(m)}
-                            className="p-1.5 hover:bg-primary/20 text-primary rounded-lg transition-colors"
-                            title="Editar registro"
-                          >
+                          <button onClick={() => onEdit(m)} className="p-1.5 hover:bg-primary/20 text-primary rounded-lg transition-colors" title="Editar registro">
                             <span className="material-symbols-outlined text-sm">edit</span>
                           </button>
                         )}
                         {userRol === 'SUPER_ADMIN' && (
-                          <button 
-                            onClick={() => handleEliminar(m.id)}
-                            disabled={isDeleting === m.id}
-                            className="p-1.5 hover:bg-rose-500/20 text-rose-500 rounded-lg transition-colors"
-                            title="Eliminar registro"
-                          >
-                            <span className="material-symbols-outlined text-sm">
-                              {isDeleting === m.id ? 'hourglass_empty' : 'delete'}
-                            </span>
+                          <button onClick={() => handleEliminar(m.id)} disabled={isDeleting === m.id} className="p-1.5 hover:bg-rose-500/20 text-rose-500 rounded-lg transition-colors" title="Eliminar registro">
+                            <span className="material-symbols-outlined text-sm">{isDeleting === m.id ? 'hourglass_empty' : 'delete'}</span>
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
                 );
-              }) : (
-                <tr>
-                  <td colSpan={7} className="p-20 text-center text-slate-600 uppercase font-black tracking-[0.5em] text-[10px]">
-                    No se encontraron movimientos
-                  </td>
-                </tr>
-              )}
+              }) : null}
             </tbody>
           </table>
+        </div>
+
+        {/* VISTA DE CARDS (MÓVIL) */}
+        <div className="md:hidden divide-y divide-white/5">
+          {datosFiltrados.length > 0 ? datosFiltrados.map(m => {
+            const esIngreso = CATEGORIAS_FINANZAS.INGRESO.includes(m.categoria);
+            const colorEstado = m.estado_pago === 'PAGADO' ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5';
+            const puedeEditar = ['ADMINISTRATIVO', 'DIRECTOR', 'SUPER_ADMIN'].includes(userRol);
+
+            return (
+              <div key={m.id} className="p-5 space-y-4 hover:bg-white/[0.01]">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-400 font-bold text-[10px]">{new Date(m.fecha_pago).toLocaleDateString('es-CO')}</p>
+                    <h4 className="font-black text-white uppercase text-[11px] leading-tight">
+                      {m.usuarios?.primer_nombre} {m.usuarios?.primer_apellido}
+                    </h4>
+                    <p className="text-primary font-black text-[8px] mt-0.5">DOC: {m.usuarios?.numero_documento}</p>
+                  </div>
+                  <div className={`text-right font-black text-base ${esIngreso ? 'text-cyan-400' : 'text-indigo-400'}`}>
+                    {esIngreso ? '+' : '-'}${Number(m.monto).toLocaleString('es-CO')}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className={`px-2 py-0.5 rounded font-black text-[8px] uppercase ${esIngreso ? 'bg-cyan-500/10 text-cyan-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
+                    {m.categoria}
+                  </span>
+                  <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded">
+                    {m.metodo_pago}
+                  </span>
+                  <div className="ml-auto">
+                    {puedeEditar ? (
+                      <select 
+                        value={m.estado_pago} 
+                        onChange={(e) => handleCambiarEstado(m.id, e.target.value)}
+                        className={`px-3 py-1 rounded-full font-black text-[8px] uppercase border outline-none ${colorEstado} appearance-none text-center`}
+                      >
+                        <option value="PAGADO" className="bg-[#020617]">PAGADO</option>
+                        <option value="PENDIENTE" className="bg-[#020617]">PENDIENTE</option>
+                      </select>
+                    ) : (
+                      <span className={`px-3 py-1 rounded-full font-black text-[8px] uppercase border ${colorEstado}`}>
+                        {m.estado_pago}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {m.concepto && (
+                  <p className="text-slate-500 italic text-[10px] bg-white/[0.02] p-2 rounded-lg border border-white/5">
+                    {m.concepto}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  {puedeEditar && (
+                    <button onClick={() => onEdit(m)} className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 text-primary rounded-xl font-black text-[9px] uppercase tracking-widest">
+                      <span className="material-symbols-outlined text-xs">edit</span> Editar
+                    </button>
+                  )}
+                  {userRol === 'SUPER_ADMIN' && (
+                    <button onClick={() => handleEliminar(m.id)} disabled={isDeleting === m.id} className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-500 rounded-xl font-black text-[9px] uppercase tracking-widest">
+                      <span className="material-symbols-outlined text-xs">delete</span> 
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="p-20 text-center text-slate-600 uppercase font-black tracking-[0.5em] text-[10px]">
+              No hay movimientos
+            </div>
+          )}
         </div>
       </div>
     </div>
