@@ -142,7 +142,7 @@ const CalendarioPage = ({ userRol }) => {
 
       <div className="flex flex-col lg:grid lg:grid-cols-4 gap-8">
         
-        {/* BARRA LATERAL (Filtros) - En móvil aparece primero o después según prefieras, aquí la pondremos abajo para priorizar el calendario */}
+        {/* BARRA LATERAL (Filtros) */}
         <div className="order-2 lg:order-2 space-y-6">
           <div className="bg-[#0a0f18]/80 border border-white/10 rounded-[2.5rem] p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex items-center gap-3 mb-8 px-2">
@@ -223,8 +223,8 @@ const CalendarioPage = ({ userRol }) => {
           </div>
         </div>
 
-        {/* CALENDARIO PRINCIPAL - Usamos overflow-x-auto para que en móvil se pueda desplazar */}
-        <div className="order-1 lg:order-1 lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-4 md:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        {/* CALENDARIO PRINCIPAL - CORRECCIÓN RESPONSIVE AQUÍ */}
+        <div className="order-1 lg:order-1 lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-4 md:p-8 shadow-2xl backdrop-blur-md relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
           
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
@@ -253,8 +253,9 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-          <div className="overflow-x-auto custom-scrollbar">
-            <div className="min-w-[850px] lg:min-w-full">
+          {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
+          <div className="w-full overflow-x-auto custom-scrollbar-h">
+            <div className="min-w-[800px] lg:min-w-full pb-4">
               <div className="grid grid-cols-7 border-b border-white/5 mb-4 text-center">
                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
                   <div key={d} className="py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">{d}</div>
