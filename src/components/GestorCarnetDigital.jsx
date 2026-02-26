@@ -20,7 +20,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
   const [editando, setEditando] = useState(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   
-  // NUEVO: Estado para selección múltiple
+  // Estado para selección múltiple
   const [seleccionadosIds, setSeleccionadosIds] = useState([]);
   
   const fileInputRef = useRef(null);
@@ -35,6 +35,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
   }, []);
 
   const fetchAlumnos = async () => {
+    // Usando el nombre de tabla: usuarios
     let query = supabase
       .from('usuarios') 
       .select('*')
@@ -71,7 +72,6 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
-  // ------------------------------------
 
   const manejarCambioFecha = (fecha) => {
     const nuevaCategoria = obtenerCategoriaPorFecha(fecha);
@@ -108,6 +108,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
     e.preventDefault();
     if (!editando?.id) return;
 
+    // Desestructuración para no enviar campos protegidos o autogenerados
     const { 
         id, 
         created_at, 
@@ -141,7 +142,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
       const { error } = await supabase.from('usuarios').delete().eq('id', id);
       if (error) throw error;
       setAlumnos(alumnos.filter(a => a.id !== id));
-      setSeleccionadosIds(prev => prev.filter(item => item !== id)); // Limpiar de seleccionados
+      setSeleccionadosIds(prev => prev.filter(item => item !== id));
       if (seleccionado?.id === id) setSeleccionado(null);
       alert("Registro eliminado.");
     } catch (error) { alert(error.message); }
@@ -168,7 +169,6 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
   const getCountStatus = (status) => alumnos.filter(a => (a.estado || '').toUpperCase() === status.toUpperCase()).length;
 
   const descargarReporteAlumnos = () => {
-    // Si hay seleccionados, reportar solo esos. Si no, reportar filtrados.
     const dataAReportar = seleccionadosIds.length > 0 
       ? alumnos.filter(a => seleccionadosIds.includes(a.id))
       : filtrados;
@@ -206,6 +206,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
     <div className="space-y-8 px-4">
       {!isAlumno && (
         <div className="space-y-6">
+          {/* Barra de Búsqueda */}
           <div className="flex gap-4">
             <div className="flex-1 bg-[#0a0f18]/60 border border-white/10 rounded-2xl flex items-center px-6 py-4 backdrop-blur-xl shadow-inner">
               <input 
@@ -218,6 +219,7 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
             </div>
           </div>
 
+          {/* Filtros y Exportación */}
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
               {['TODOS', 'INICIACIÓN', 'INFANTIL', 'TRANSICIÓN'].map(cat => (
@@ -258,7 +260,6 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
                 <table className="w-full text-[10px]">
                   <thead className="text-primary font-black uppercase border-b border-white/5 bg-white/5">
                     <tr>
-                      {/* HEADER CHECKBOX */}
                       <th className="p-4 text-center w-10">
                         <input 
                           type="checkbox" 
@@ -280,7 +281,6 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
                         onClick={() => setSeleccionado(alumno)} 
                         className={`hover:bg-white/5 transition-colors cursor-pointer ${seleccionado?.id === alumno.id ? 'bg-primary/5' : ''} ${seleccionadosIds.includes(alumno.id) ? 'bg-primary/10' : ''}`}
                       >
-                        {/* ROW CHECKBOX */}
                         <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
