@@ -112,7 +112,7 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
     { nombre: 'Transición', rango: '11-13 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("TRANSICION")).length },
   ];
 
-  const valMensualidad = tarifas.find(t => t.categoria_asociada === 'Mensualidad')?.valor || 0;
+  const valMensualidad = tarifas.find(t => t.categoria_asociada === 'Mensualidad' && t.nombre_tarifa === 'Mensualidad Base Full')?.valor || 0;
   const valCanchas = tarifas.find(t => t.nombre_tarifa.toLowerCase().includes('cancha'))?.valor || 0;
 
   if (loading) return <div className="py-20 text-center text-primary animate-pulse font-black uppercase text-[10px] tracking-[0.5em]">Sincronizando...</div>;
@@ -158,28 +158,41 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
 
         {/* DERECHA: TARIFAS */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
-          <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">payments</span> Tarifas Globales
-          </h3>
-          <div className="space-y-4">
-            {tarifas.length > 0 ? tarifas.map((t) => (
-              <ConfigInput 
-                key={t.id}
-                label={t.nombre_tarifa} 
-                value={t.valor.toString()} 
-                onChange={(val) => handleUpdateTarifa(t.id, Number(val))}
-              />
-            )) : <p className="text-[10px] text-slate-500 uppercase font-black text-center py-4">No hay tarifas en DB</p>}
-            
-            <button 
-              onClick={handleGuardarTarifas}
-              disabled={saving}
-              className="w-full bg-primary text-black py-4 rounded-xl text-[10px] font-black uppercase hover:bg-white transition-all active:scale-95 disabled:opacity-50"
-            >
-              {saving ? 'Guardando...' : 'GUARDAR Y ACTUALIZAR'}
-            </button>
-          </div>
-        </div>
+  <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
+    <span className="material-symbols-outlined text-primary">payments</span> Tarifas Globales
+  </h3>
+  
+  <div className="space-y-4">
+    {tarifas.length > 0 ? tarifas.map((t) => (
+      <div key={t.id} className="relative group">
+        {/* Signo de pesos posicionado sobre el input */}
+        <span className="absolute left-4 bottom-[14px] text-primary font-black text-xs z-10">
+          $
+        </span>
+        
+        <ConfigInput 
+          label={t.nombre_tarifa} 
+          value={t.valor.toString()} 
+          onChange={(val) => handleUpdateTarifa(t.id, Number(val))}
+          // Si tu ConfigInput acepta className, podrías pasarle un padding-left extra:
+          // className="pl-8" 
+        />
+      </div>
+    )) : (
+      <p className="text-[10px] text-slate-500 uppercase font-black text-center py-4">
+        No hay tarifas en DB
+      </p>
+    )}
+    
+    <button 
+      onClick={handleGuardarTarifas}
+      disabled={saving}
+      className="w-full bg-primary text-black py-4 rounded-xl text-[10px] font-black uppercase hover:bg-white transition-all active:scale-95 disabled:opacity-50 mt-2"
+    >
+      {saving ? 'Guardando...' : 'GUARDAR Y ACTUALIZAR'}
+    </button>
+  </div>
+</div>
 
         {/* FULL WIDTH / ABAJO: PROVEEDORES */}
         <div className="lg:col-span-2 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6">
