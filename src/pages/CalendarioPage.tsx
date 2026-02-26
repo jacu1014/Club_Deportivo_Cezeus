@@ -29,7 +29,7 @@ const CalendarioPage = ({ userRol }) => {
       // 1. Carga de eventos normales
       const { data: dataEventos, error: errorEv } = await supabase.from('eventos').select('*');
       
-      // 2. Carga de cumpleaños desde la tabla 'usuarios' incluyendo el ROL
+      // 2. Carga de cumpleaños desde la tabla 'usuarios'
       const { data: dataUsuarios, error: errorUsr } = await supabase
         .from('usuarios')
         .select('primer_nombre, primer_apellido, fecha_nacimiento, rol')
@@ -60,7 +60,6 @@ const CalendarioPage = ({ userRol }) => {
         const fechaEvento = new Date(anioVista, mesNac - 1, diaNac, 12, 0, 0);
         const trimestre = mesNac <= 3 ? 'T1' : mesNac <= 6 ? 'T2' : mesNac <= 9 ? 'T3' : 'T4';
         
-        // Calculamos la edad que cumplirá en el año de la vista
         const edadCumplida = anioVista - anioNac;
 
         return {
@@ -70,7 +69,6 @@ const CalendarioPage = ({ userRol }) => {
           fecha_inicio: fechaEvento,
           color: COLORES_CUMPLEANIOS[trimestre],
           esCumpleanios: true,
-          // Información extra para la lógica de visualización
           rolUsuario: usr.rol,
           edadParaMostrar: edadCumplida
         };
@@ -118,7 +116,7 @@ const CalendarioPage = ({ userRol }) => {
   return (
     <div className="max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700 pb-20 px-4 mt-4 text-slate-200">
       
-      {/* HEADER */}
+      {/* 1. BOTÓN DE REGISTRO (HEADER) */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="text-center md:text-left space-y-1">
           <h2 className="text-white font-black text-3xl uppercase italic tracking-tighter leading-none">
@@ -140,91 +138,50 @@ const CalendarioPage = ({ userRol }) => {
         )}
       </div>
 
-      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-8">
+      <div className="flex flex-col gap-8">
         
-        {/* BARRA LATERAL (Filtros) */}
-        <div className="order-2 lg:order-2 space-y-6">
-          <div className="bg-[#0a0f18]/80 border border-white/10 rounded-[2.5rem] p-6 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-center gap-3 mb-8 px-2">
-              <span className="material-symbols-outlined text-cyan-400 text-sm">filter_list</span>
-              <h4 className="font-black text-[11px] text-white uppercase tracking-[0.2em]">Filtrar Vista</h4>
-            </div>
-            
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5">
-              {listaFiltros.map(cat => {
-                const isActive = filtrosActivos.includes(cat.id);
-                return (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => toggleFiltro(cat.id)}
-                    className={`
-                      w-full flex items-center justify-between p-3.5 rounded-[1.2rem] border transition-all duration-300 group
-                      ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}
-                    `}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="material-symbols-outlined text-[18px]" style={{ color: cat.color }}>
-                        {cat.icono || 'label'}
-                      </span>
-                      <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
-                        {cat.label}
-                      </span>
-                    </div>
-                    
-                    <div className={`
-                      w-5 h-5 rounded-lg border flex items-center justify-center transition-all
-                      ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}
-                    `}>
-                      {isActive && <span className="material-symbols-outlined text-[12px] text-black font-black">check</span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+        {/* 2. FILTROS */}
+        <div className="bg-[#0a0f18]/80 border border-white/10 rounded-[2.5rem] p-6 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 mb-6 px-2">
+            <span className="material-symbols-outlined text-cyan-400 text-sm">filter_list</span>
+            <h4 className="font-black text-[11px] text-white uppercase tracking-[0.2em]">Filtrar Vista</h4>
           </div>
-
-          {/* PRÓXIMOS EN AGENDA */}
-          <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 shadow-xl max-h-[400px] overflow-hidden flex flex-col">
-            <h4 className="font-black text-[10px] text-white uppercase tracking-widest mb-6 italic opacity-60">Próximos en agenda</h4>
-            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
-              {eventos
-                .filter(ev => {
-                  const hoy = new Date();
-                  hoy.setHours(0, 0, 0, 0);
-                  return ev.fecha_inicio >= hoy;
-                })
-                .sort((a, b) => a.fecha_inicio - b.fecha_inicio)
-                .slice(0, 10)
-                .map(ev => (
-                  <div 
-                    key={ev.id} 
-                    className={`relative pl-4 border-l-2 transition-all group py-1 ${ev.esCumpleanios ? 'border-pink-500/30 hover:border-pink-500' : 'border-white/10 hover:border-cyan-400/50'}`}
-                  >
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-[8px] font-black text-cyan-400 uppercase">
-                        {format(ev.fecha_inicio, "dd MMM", { locale: es })}
-                      </p>
-                      {ev.esCumpleanios && (
-                        <span className="material-symbols-outlined text-[10px] text-pink-500">cake</span>
-                      )}
-                    </div>
-                    <h5 className={`text-[11px] font-black uppercase italic transition-colors truncate ${ev.esCumpleanios ? 'text-pink-300 group-hover:text-pink-400' : 'text-white group-hover:text-cyan-400'}`}>
-                      {ev.titulo}
-                      {ev.esCumpleanios && ev.rolUsuario === 'ALUMNO' && (
-                        <span className="ml-1 text-[9px] text-pink-500/80">({ev.edadParaMostrar} AÑOS)</span>
-                      )}
-                    </h5>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {listaFiltros.map(cat => {
+              const isActive = filtrosActivos.includes(cat.id);
+              return (
+                <button 
+                  key={cat.id} 
+                  onClick={() => toggleFiltro(cat.id)}
+                  className={`
+                    flex items-center justify-between p-3.5 rounded-[1.2rem] border transition-all duration-300 group
+                    ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}
+                  `}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[18px]" style={{ color: cat.color }}>
+                      {cat.icono || 'label'}
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
+                      {cat.label}
+                    </span>
                   </div>
-                ))}
-              {eventos.filter(ev => ev.fecha_inicio >= new Date().setHours(0,0,0,0)).length === 0 && (
-                <p className="text-[10px] text-slate-500 italic text-center py-4 uppercase tracking-widest">Sin actividades próximas</p>
-              )}
-            </div>
+                  
+                  <div className={`
+                    w-4 h-4 rounded-md border flex items-center justify-center transition-all
+                    ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}
+                  `}>
+                    {isActive && <span className="material-symbols-outlined text-[10px] text-black font-black">check</span>}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* CALENDARIO PRINCIPAL - CORRECCIÓN RESPONSIVE AQUÍ */}
-        <div className="order-1 lg:order-1 lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-4 md:p-8 shadow-2xl backdrop-blur-md relative">
+        {/* 3. CALENDARIO */}
+        <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-4 md:p-8 shadow-2xl backdrop-blur-md relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
           
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
@@ -245,7 +202,6 @@ const CalendarioPage = ({ userRol }) => {
             {loading && <div className="text-[10px] font-black text-cyan-400 animate-pulse uppercase tracking-widest">Sincronizando...</div>}
           </div>
 
-          {/* INDICADOR VISUAL DE SCROLL (Solo Móvil) */}
           <div className="lg:hidden flex justify-end mb-2 animate-bounce">
             <div className="flex items-center gap-1 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1 rounded-full">
               <span className="text-[8px] font-black text-cyan-400 uppercase tracking-tighter">Desliza para ver más</span>
@@ -253,7 +209,6 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-          {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
           <div className="w-full overflow-x-auto custom-scrollbar-h">
             <div className="min-w-[800px] lg:min-w-full pb-4">
               <div className="grid grid-cols-7 border-b border-white/5 mb-4 text-center">
@@ -344,6 +299,55 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
         </div>
+
+        {/* 4. PRÓXIMOS AGENDAMIENTOS */}
+        <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+          <div className="flex items-center gap-3 mb-8">
+            <span className="material-symbols-outlined text-cyan-400 text-sm">event_upcoming</span>
+            <h4 className="font-black text-[11px] text-white uppercase tracking-[0.2em]">Próximos en agenda</h4>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {eventos
+              .filter(ev => {
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                return ev.fecha_inicio >= hoy;
+              })
+              .sort((a, b) => a.fecha_inicio - b.fecha_inicio)
+              .slice(0, 6)
+              .map(ev => (
+                <div 
+                  key={ev.id} 
+                  className={`relative p-5 rounded-2xl border bg-black/20 transition-all group ${ev.esCumpleanios ? 'border-pink-500/30 hover:border-pink-500' : 'border-white/5 hover:border-cyan-400/50'}`}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+                       <p className="text-[9px] font-black text-cyan-400 uppercase tracking-tighter">
+                        {format(ev.fecha_inicio, "EEEE dd 'de' MMMM", { locale: es })}
+                      </p>
+                    </div>
+                    {ev.esCumpleanios && (
+                      <span className="material-symbols-outlined text-pink-500">cake</span>
+                    )}
+                  </div>
+                  <h5 className={`text-[13px] font-black uppercase italic transition-colors line-clamp-2 ${ev.esCumpleanios ? 'text-pink-300' : 'text-white'}`}>
+                    {ev.titulo}
+                    {ev.esCumpleanios && ev.rolUsuario === 'ALUMNO' && (
+                      <span className="ml-2 text-pink-500/80">({ev.edadParaMostrar} AÑOS)</span>
+                    )}
+                  </h5>
+                </div>
+              ))}
+            
+            {eventos.filter(ev => ev.fecha_inicio >= new Date().setHours(0,0,0,0)).length === 0 && (
+              <div className="col-span-full py-12 text-center">
+                <p className="text-[10px] text-slate-500 italic uppercase tracking-widest">Sin actividades próximas</p>
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
       <ModalEvento 
