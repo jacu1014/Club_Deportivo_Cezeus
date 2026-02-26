@@ -28,6 +28,24 @@ const FinanceTable = ({
   
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
+  // --- LÓGICA DE EXTRACCIÓN DE NOMBRES ---
+  // Esta función centraliza cómo obtenemos el nombre ya sea de la tabla 'usuarios' o 'proveedores'
+  const obtenerNombreEntidad = (m: any) => {
+    if (m.usuarios) {
+      return `${m.usuarios.primer_nombre || ''} ${m.usuarios.primer_apellido || ''}`.trim().toUpperCase();
+    }
+    if (m.proveedores) {
+      return (m.proveedores.nombre_proveedor || 'PROVEEDOR SIN NOMBRE').toUpperCase();
+    }
+    return 'N/A';
+  };
+
+  const obtenerDocumentoEntidad = (m: any) => {
+    if (m.usuarios) return m.usuarios.numero_documento || 'N/A';
+    if (m.proveedores) return m.proveedores.nit_cc || 'N/A';
+    return 'N/A';
+  };
+
   // --- ACCIONES ---
   const handleCambiarEstado = async (id: string, nuevoEstado: string) => {
     try {
@@ -73,8 +91,8 @@ const FinanceTable = ({
   const exportarExcel = () => {
     const dataParaExcel = datosFiltrados.map(m => ({
       FECHA: m.fecha_pago.split('T')[0],
-      USUARIO: `${m.usuarios?.primer_nombre || ''} ${m.usuarios?.primer_apellido || ''}`.toUpperCase(),
-      DOCUMENTO: m.usuarios?.numero_documento || 'N/A',
+      ENTIDAD: obtenerNombreEntidad(m),
+      DOCUMENTO: obtenerDocumentoEntidad(m),
       CONCEPTO: (m.concepto || '').toUpperCase(),
       CATEGORIA: m.categoria.toUpperCase(),
       FLUJO: CATEGORIAS_FINANZAS.INGRESO.includes(m.categoria) ? 'INGRESO' : 'EGRESO',
@@ -197,7 +215,7 @@ const FinanceTable = ({
             <thead className="bg-white/5 text-slate-500 font-black uppercase tracking-widest">
               <tr>
                 <th className="p-5">Fecha</th>
-                <th className="p-5">Usuario / Documento</th>
+                <th className="p-5">Entidad / Documento</th>
                 <th className="p-5 text-center">Categoría</th>
                 <th className="p-5 text-center">Método</th>
                 <th className="p-5 text-right">Monto</th>
@@ -210,6 +228,11 @@ const FinanceTable = ({
                 const esIngreso = CATEGORIAS_FINANZAS.INGRESO.includes(m.categoria);
                 const colorEstado = m.estado_pago === 'PAGADO' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20';
                 const puedeEditar = ['ADMINISTRATIVO', 'DIRECTOR', 'SUPER_ADMIN'].includes(userRol);
+                
+                // --- VARIABLES DE IDENTIDAD ---
+                const nombreEntidad = obtenerNombreEntidad(m);
+                const documentoEntidad = obtenerDocumentoEntidad(m);
+                const tipoEntidad = m.usuarios ? 'USUARIO' : m.proveedores ? 'PROVEEDOR' : 'N/A';
 
                 return (
                   <tr key={m.id} className="hover:bg-white/[0.02] transition-all group">
@@ -217,11 +240,18 @@ const FinanceTable = ({
                       <p className="text-slate-400 font-bold">{new Date(m.fecha_pago).toLocaleDateString('es-CO')}</p>
                     </td>
                     <td className="p-5">
-                      <p className="font-bold text-white uppercase leading-tight">
-                        {m.usuarios?.primer_nombre} {m.usuarios?.primer_apellido}
-                      </p>
-                      <p className="text-primary font-black text-[8px]">DOC: {m.usuarios?.numero_documento}</p>
-                      <p className="text-slate-500 italic text-[9px] truncate max-w-[150px]">{m.concepto}</p>
+                      <div className="flex flex-col">
+                        <p className="font-bold text-white uppercase leading-tight">
+                          {nombreEntidad}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[7px] px-1 rounded-sm font-black ${m.usuarios ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                            {tipoEntidad}
+                          </span>
+                          <p className="text-primary font-black text-[8px]">DOC: {documentoEntidad}</p>
+                        </div>
+                        <p className="text-slate-500 italic text-[9px] truncate max-w-[200px] mt-1">{m.concepto}</p>
+                      </div>
                     </td>
                     <td className="p-5 text-center">
                       <span className={`px-2 py-0.5 rounded font-bold text-[8px] uppercase ${esIngreso ? 'bg-cyan-500/10 text-cyan-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
@@ -278,15 +308,18 @@ const FinanceTable = ({
             const colorEstado = m.estado_pago === 'PAGADO' ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' : 'text-amber-500 border-amber-500/20 bg-amber-500/5';
             const puedeEditar = ['ADMINISTRATIVO', 'DIRECTOR', 'SUPER_ADMIN'].includes(userRol);
 
+            const nombreEntidad = obtenerNombreEntidad(m);
+            const documentoEntidad = obtenerDocumentoEntidad(m);
+
             return (
               <div key={m.id} className="p-5 space-y-4 hover:bg-white/[0.01]">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-slate-400 font-bold text-[10px]">{new Date(m.fecha_pago).toLocaleDateString('es-CO')}</p>
-                    <h4 className="font-black text-white uppercase text-[11px] leading-tight">
-                      {m.usuarios?.primer_nombre} {m.usuarios?.primer_apellido}
+                    <h4 className="font-black text-white uppercase text-[11px] leading-tight mt-1">
+                      {nombreEntidad}
                     </h4>
-                    <p className="text-primary font-black text-[8px] mt-0.5">DOC: {m.usuarios?.numero_documento}</p>
+                    <p className="text-primary font-black text-[8px] mt-0.5">DOC: {documentoEntidad}</p>
                   </div>
                   <div className={`text-right font-black text-base ${esIngreso ? 'text-cyan-400' : 'text-indigo-400'}`}>
                     {esIngreso ? '+' : '-'}${Number(m.monto).toLocaleString('es-CO')}

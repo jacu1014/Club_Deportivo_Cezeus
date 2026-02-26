@@ -14,12 +14,11 @@ const PagosModule = ({ user }: { user: any }) => {
   const [pagoAEditar, setPagoAEditar] = useState<any | null>(null);
   const [toasts, setToasts] = useState<any[]>([]);
 
-  // --- NUEVO: ESTADO DE FILTROS ELEVADO ---
   const [filtros, setFiltros] = useState({
     busqueda: '',
     fechaEspecifica: '',
-    mes: new Date().getMonth() + 1, // Por defecto mes actual
-    anio: new Date().getFullYear(), // Por defecto año actual
+    mes: new Date().getMonth() + 1,
+    anio: new Date().getFullYear(),
     categoria: null as string | null,
     estado: null as string | null,
     metodo: null as string | null,
@@ -28,7 +27,6 @@ const PagosModule = ({ user }: { user: any }) => {
 
   const userRol = user?.rol || user?.user_metadata?.rol;
 
-  // --- NOTIFICACIONES ---
   const mostrarToast = useCallback((mensaje: string, tipo: 'success' | 'error' = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, mensaje, tipo }]);
@@ -37,7 +35,7 @@ const PagosModule = ({ user }: { user: any }) => {
     }, 3000);
   }, []);
 
-  // --- CARGA DE DATOS ---
+  // --- CARGA DE DATOS ACTUALIZADA ---
   const cargarCaja = useCallback(async () => {
     setLoading(true);
     try {
@@ -48,8 +46,11 @@ const PagosModule = ({ user }: { user: any }) => {
           usuarios (
             id, numero_documento, primer_nombre, segundo_nombre, 
             primer_apellido, segundo_apellido, rol
+          ),
+          proveedores (
+            id, nombre_proveedor, nit_cc
           )
-        `);
+        `); // <-- Se agregó la relación con proveedores
 
       if (userRol === 'ALUMNO' || userRol === 'ENTRENADOR') {
         query = query.eq('usuario_id', user.id);
@@ -69,7 +70,7 @@ const PagosModule = ({ user }: { user: any }) => {
     cargarCaja();
   }, [cargarCaja]);
 
-  // --- LÓGICA DE FILTRADO MAESTRA (Rescatada de FinanceTable) ---
+  // --- LÓGICA DE FILTRADO MAESTRA ACTUALIZADA ---
   const datosFiltrados = useMemo(() => {
     return datos.filter(d => {
       const fechaObj = new Date(d.fecha_pago);
@@ -89,20 +90,28 @@ const PagosModule = ({ user }: { user: any }) => {
       const coincideTipo = !filtros.tipo || tipoReal === filtros.tipo;
 
       const term = filtros.busqueda.toLowerCase().trim();
-      const u = d.usuarios;
-      const nombreCompleto = [u?.primer_nombre, u?.segundo_nombre, u?.primer_apellido, u?.segundo_apellido]
-        .filter(Boolean).join(' ').toLowerCase();
       
+      // Lógica para detectar nombre ya sea Usuario o Proveedor
+      const u = d.usuarios;
+      const p = d.proveedores;
+      
+      const nombreUsuario = u ? [u.primer_nombre, u.segundo_nombre, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(' ') : '';
+      const nombreProveedor = p ? p.nombre_proveedor : '';
+      
+      const docUsuario = u?.numero_documento || '';
+      const nitProveedor = p?.nit_cc || '';
+
       const coincideBusqueda = !term || 
-        nombreCompleto.includes(term) || 
-        (u?.numero_documento || '').toLowerCase().includes(term) ||
+        nombreUsuario.toLowerCase().includes(term) || 
+        nombreProveedor.toLowerCase().includes(term) ||
+        docUsuario.toLowerCase().includes(term) ||
+        nitProveedor.toLowerCase().includes(term) ||
         (d.concepto || '').toLowerCase().includes(term);
 
       return coincideFecha && coincideMes && coincideAnio && coincideCat && coincideEstado && coincideMetodo && coincideTipo && coincideBusqueda;
     });
   }, [datos, filtros]);
 
-  // --- ACCIONES ---
   const handleAbrirEdicion = (movimiento: any) => {
     setPagoAEditar(movimiento);
     setMostrarModal(true);
@@ -116,7 +125,7 @@ const PagosModule = ({ user }: { user: any }) => {
   return (
     <div className="p-4 md:p-6 space-y-6 bg-[#020617] min-h-screen text-white relative">
       
-      {/* TOASTS: Ajustados para móvil */}
+      {/* TOASTS */}
       <div className="fixed top-4 right-4 left-4 md:left-auto md:top-6 md:right-6 z-[100] space-y-3">
         {toasts.map(t => (
           <div key={t.id} className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300 ${t.tipo === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
@@ -126,7 +135,7 @@ const PagosModule = ({ user }: { user: any }) => {
         ))}
       </div>
 
-      {/* HEADER: Stack vertical en móvil, horizontal en escritorio */}
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-black italic tracking-tighter text-primary uppercase">PAGOS</h1>
@@ -143,10 +152,8 @@ const PagosModule = ({ user }: { user: any }) => {
         )}
       </div>
 
-      {/* DASHBOARD */}
       <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
 
-      {/* TABLA */}
       <FinanceTable 
         datosOriginales={datos}
         datosFiltrados={datosFiltrados} 
