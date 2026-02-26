@@ -48,9 +48,8 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
   }, [isOpen]);
 
   // --- 2. LÓGICA DE DETECCIÓN DE TARIFAS (INTELIGENCIA DE DATOS) ---
-  // Se dispara cuando cambia la categoría
   useEffect(() => {
-    if (!formData.categoria || editData) return; // No auto-llenar si estamos editando (respetar valor guardado)
+    if (!formData.categoria || editData) return; 
 
     const tarifaEncontrada = tarifasGlobales.find(
       t => t.categoria_asociada?.toUpperCase() === formData.categoria.toUpperCase()
@@ -60,7 +59,7 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
       setFormData(prev => ({
         ...prev,
         monto: tarifaEncontrada.valor.toString(),
-        concepto: tarifaEncontrada.nombre_tarifa // Sugerir el nombre de la tarifa como concepto
+        concepto: tarifaEncontrada.nombre_tarifa 
       }));
     }
   }, [formData.categoria, tarifasGlobales, editData]);
@@ -303,16 +302,45 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
                 />
             </div>
 
+            {/* SECCIÓN RESTAURADA: ESTADO DE PAGO (PENDIENTE / PAGADO) */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-2">Estado del Movimiento</label>
+              <div className="grid grid-cols-2 gap-3 bg-[#020617] p-1.5 rounded-2xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, estado_pago: 'PENDIENTE' })}
+                  className={`py-3 rounded-xl text-[10px] font-black transition-all ${
+                    formData.estado_pago === 'PENDIENTE'
+                      ? 'bg-cyan-400 text-black shadow-lg shadow-cyan-400/20'
+                      : 'text-slate-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  PENDIENTE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, estado_pago: 'PAGADO' })}
+                  className={`py-3 rounded-xl text-[10px] font-black transition-all ${
+                    formData.estado_pago === 'PAGADO'
+                      ? 'bg-[#1a1f2e] text-white border border-white/10 shadow-lg'
+                      : 'text-slate-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  PAGADO
+                </button>
+              </div>
+            </div>
+
             <div className="pt-2">
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-cyan-400 text-black font-black uppercase tracking-[0.2em] p-5 rounded-2xl hover:bg-cyan-300 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-cyan-400/20 flex items-center justify-center gap-3"
+                    className="w-full bg-cyan-400 text-black font-black uppercase tracking-[0.2em] py-4 rounded-2xl hover:bg-cyan-300 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-cyan-400/20 flex items-center justify-center gap-3 text-[11px]"
                 >
-                    <span className="material-symbols-outlined text-xl">
+                    <span className="material-symbols-outlined text-lg">
                         {editData ? 'update' : 'account_balance_wallet'}
                     </span>
-                    {loading ? 'PROCESANDO TRANSACCIÓN...' : editData ? 'ACTUALIZAR REGISTRO' : 'REGISTRAR MOVIMIENTO'}
+                    {loading ? 'PROCESANDO...' : editData ? 'ACTUALIZAR REGISTRO' : 'REGISTRAR MOVIMIENTO'}
                 </button>
             </div>
           </form>
