@@ -17,7 +17,7 @@ const PagosModule = ({ user }: { user: any }) => {
   const [filtros, setFiltros] = useState({
     busqueda: '',
     fechaEspecifica: '',
-    mes: new Date().getMonth() + 1,
+    mes: null,
     anio: new Date().getFullYear(),
     categoria: null as string | null,
     estado: null as string | null,
