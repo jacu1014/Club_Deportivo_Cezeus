@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval,
-  differenceInYears
+  startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../lib/supabaseClient';
@@ -26,10 +25,8 @@ const CalendarioPage = ({ userRol }) => {
   const fetchEventos = async () => {
     try {
       setLoading(true);
-      // 1. Carga de eventos normales
       const { data: dataEventos, error: errorEv } = await supabase.from('eventos').select('*');
       
-      // 2. Carga de cumpleaños desde la tabla 'usuarios' incluyendo el ROL
       const { data: dataUsuarios, error: errorUsr } = await supabase
         .from('usuarios')
         .select('primer_nombre, primer_apellido, fecha_nacimiento, rol')
@@ -59,8 +56,6 @@ const CalendarioPage = ({ userRol }) => {
         const anioVista = currentMonth.getFullYear();
         const fechaEvento = new Date(anioVista, mesNac - 1, diaNac, 12, 0, 0);
         const trimestre = mesNac <= 3 ? 'T1' : mesNac <= 6 ? 'T2' : mesNac <= 9 ? 'T3' : 'T4';
-        
-        // Calculamos la edad que cumplirá en el año de la vista
         const edadCumplida = anioVista - anioNac;
 
         return {
@@ -70,7 +65,6 @@ const CalendarioPage = ({ userRol }) => {
           fecha_inicio: fechaEvento,
           color: COLORES_CUMPLEANIOS[trimestre],
           esCumpleanios: true,
-          // Información extra para la lógica de visualización
           rolUsuario: usr.rol,
           edadParaMostrar: edadCumplida
         };
@@ -140,10 +134,53 @@ const CalendarioPage = ({ userRol }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8">
+      {/* CONTENEDOR PRINCIPAL: Usa flex-col en móvil para controlar el orden y grid en desktop */}
+      <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6 md:gap-8">
         
-        {/* CALENDARIO PRINCIPAL */}
-        <div className="lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        {/* BARRA DE FILTROS: Aparece primero en móvil (order-1) y a la derecha en desktop (lg:order-2) */}
+        <div className="order-1 lg:order-2 lg:col-span-1 space-y-6">
+          <div className="bg-[#0a0f18]/80 border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center gap-3 mb-6 md:mb-8 px-2">
+              <span className="material-symbols-outlined text-cyan-400 text-sm">filter_list</span>
+              <h4 className="font-black text-[10px] md:text-[11px] text-white uppercase tracking-[0.2em]">Filtrar Vista</h4>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 md:gap-2.5">
+              {listaFiltros.map(cat => {
+                const isActive = filtrosActivos.includes(cat.id);
+                return (
+                  <button 
+                    key={cat.id} 
+                    onClick={() => toggleFiltro(cat.id)}
+                    className={`
+                      w-full flex items-center justify-between p-2.5 md:p-3.5 rounded-xl md:rounded-[1.2rem] border transition-all duration-300 group
+                      ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}
+                    `}
+                  >
+                    <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
+                      <span className="material-symbols-outlined text-[16px] md:text-[18px] shrink-0" style={{ color: cat.color }}>
+                        {cat.icono || 'label'}
+                      </span>
+                      <span className={`text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-colors truncate ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
+                        {cat.label}
+                      </span>
+                    </div>
+                    
+                    <div className={`
+                      w-4 h-4 md:w-5 md:h-5 rounded-md md:rounded-lg border flex items-center justify-center transition-all shrink-0
+                      ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}
+                    `}>
+                      {isActive && <span className="material-symbols-outlined text-[10px] md:text-[12px] text-black font-black">check</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* CALENDARIO PRINCIPAL: Aparece segundo en móvil (order-2) y a la izquierda en desktop (lg:order-1) */}
+        <div className="order-2 lg:order-1 lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
           
           <div className="flex flex-col sm:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
@@ -164,9 +201,8 @@ const CalendarioPage = ({ userRol }) => {
             {loading && <div className="text-[8px] md:text-[10px] font-black text-cyan-400 animate-pulse uppercase tracking-widest">Sincronizando...</div>}
           </div>
 
-          {/* Wrapper de Scroll para móviles */}
-          <div className="overflow-x-auto pb-4">
-            <div className="min-w-[700px]"> {/* Garantiza que el calendario no se aplaste en pantallas muy pequeñas */}
+          <div className="overflow-x-auto pb-4 custom-scrollbar">
+            <div className="min-w-[700px]">
               <div className="grid grid-cols-7 border-b border-white/5 mb-4 text-center">
                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
                   <div key={d} className="py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">{d}</div>
@@ -256,48 +292,8 @@ const CalendarioPage = ({ userRol }) => {
           </div>
         </div>
 
-        {/* BARRA LATERAL */}
-        <div className="space-y-6">
-          <div className="bg-[#0a0f18]/80 border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-6 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-center gap-3 mb-6 md:mb-8 px-2">
-              <span className="material-symbols-outlined text-cyan-400 text-sm">filter_list</span>
-              <h4 className="font-black text-[10px] md:text-[11px] text-white uppercase tracking-[0.2em]">Filtrar Vista</h4>
-            </div>
-            
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 md:gap-2.5">
-              {listaFiltros.map(cat => {
-                const isActive = filtrosActivos.includes(cat.id);
-                return (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => toggleFiltro(cat.id)}
-                    className={`
-                      w-full flex items-center justify-between p-2.5 md:p-3.5 rounded-xl md:rounded-[1.2rem] border transition-all duration-300 group
-                      ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}
-                    `}
-                  >
-                    <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-                      <span className="material-symbols-outlined text-[16px] md:text-[18px] shrink-0" style={{ color: cat.color }}>
-                        {cat.icono || 'label'}
-                      </span>
-                      <span className={`text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-colors truncate ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
-                        {cat.label}
-                      </span>
-                    </div>
-                    
-                    <div className={`
-                      w-4 h-4 md:w-5 md:h-5 rounded-md md:rounded-lg border flex items-center justify-center transition-all shrink-0
-                      ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}
-                    `}>
-                      {isActive && <span className="material-symbols-outlined text-[10px] md:text-[12px] text-black font-black">check</span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* PRÓXIMOS EN AGENDA */}
+        {/* PRÓXIMOS EN AGENDA: Aparece tercero en móvil (order-3) y debajo de filtros en desktop */}
+        <div className="order-3 lg:order-3 lg:col-span-1">
           <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-5 md:p-6 shadow-xl max-h-[400px] overflow-hidden flex flex-col">
             <h4 className="font-black text-[9px] md:text-[10px] text-white uppercase tracking-widest mb-4 md:mb-6 italic opacity-60">Próximos en agenda</h4>
             <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
@@ -330,6 +326,9 @@ const CalendarioPage = ({ userRol }) => {
                     </h5>
                   </div>
                 ))}
+              {eventos.filter(ev => ev.fecha_inicio >= new Date().setHours(0,0,0,0)).length === 0 && (
+                <p className="text-[10px] text-slate-500 italic text-center py-4 uppercase tracking-widest">Sin actividades próximas</p>
+              )}
             </div>
           </div>
         </div>
