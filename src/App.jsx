@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
+// NUEVO: Importación para Analítica de Vercel
+import { Analytics } from '@vercel/analytics/react';
 
 // Layouts y Páginas
 import Login from './pages/Login';
@@ -88,65 +90,64 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        {/* Al hacer login, redirigimos a /alumnos. 
-            Si el usuario es ALUMNO, ahora entrará a su Seguimiento 
-            porque ya tiene el permiso habilitado */}
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+    <>
+      <Router>
+        <Routes>
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Ruta: ALUMNOS / SEGUIMIENTO 
-            Para el alumno, esta es su página principal de progreso */}
-        <Route 
-          path="/alumnos" 
-          element={
-            user && canAccess(PaginasApp.ALUMNOS) ? (
-              <MainLayout user={user}>
-                <Alumnos />
-              </MainLayout>
-            ) : <Navigate to={user ? "/calendario" : "/login"} />
-          } 
-        />
+          <Route 
+            path="/alumnos" 
+            element={
+              user && canAccess(PaginasApp.ALUMNOS) ? (
+                <MainLayout user={user}>
+                  <Alumnos />
+                </MainLayout>
+              ) : <Navigate to={user ? "/calendario" : "/login"} />
+            } 
+          />
 
-        <Route 
-          path="/calendario" 
-          element={
-            user && canAccess(PaginasApp.CALENDARIO) ? (
-              <MainLayout user={user}>
-                <CalendarioPage userRol={user.rol} />
-              </MainLayout>
-            ) : <Navigate to="/login" />
-          } 
-        />
+          <Route 
+            path="/calendario" 
+            element={
+              user && canAccess(PaginasApp.CALENDARIO) ? (
+                <MainLayout user={user}>
+                  <CalendarioPage userRol={user.rol} />
+                </MainLayout>
+              ) : <Navigate to="/login" />
+            } 
+          />
 
-        <Route 
-          path="/configuracion" 
-          element={
-            user && canAccess(PaginasApp.CONFIGURACION) ? (
-              <MainLayout user={user}>
-                <Configuracion user={user} />
-              </MainLayout>
-            ) : <Navigate to="/login" />
-          } 
-        />
+          <Route 
+            path="/configuracion" 
+            element={
+              user && canAccess(PaginasApp.CONFIGURACION) ? (
+                <MainLayout user={user}>
+                  <Configuracion user={user} />
+                </MainLayout>
+              ) : <Navigate to="/login" />
+            } 
+          />
 
-        <Route 
-          path="/pagos" 
-          element={
-            user && canAccess(PaginasApp.PAGOS) ? (
-              <MainLayout user={user}>
-                <PagosModule user={user} /> 
-              </MainLayout>
-            ) : <Navigate to="/login" />
-          } 
-        />
+          <Route 
+            path="/pagos" 
+            element={
+              user && canAccess(PaginasApp.PAGOS) ? (
+                <MainLayout user={user}>
+                  <PagosModule user={user} /> 
+                </MainLayout>
+              ) : <Navigate to="/login" />
+            } 
+          />
 
-        {/* Redirección por defecto: Si es Alumno y entra a la raíz, lo mandamos a Alumnos (Seguimiento) */}
-        <Route path="/" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
-        <Route path="*" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
-      </Routes>
-    </Router>
+          <Route path="/" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
+          <Route path="*" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
+        </Routes>
+      </Router>
+      
+      {/* NUEVO: Componente de Analítica (fuera del Router para rastrear todo) */}
+      <Analytics />
+    </>
   );
 }
 
