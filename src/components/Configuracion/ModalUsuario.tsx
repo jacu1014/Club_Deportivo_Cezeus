@@ -40,7 +40,30 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
     setMensaje({ texto, tipo });
     setTimeout(() => setMensaje(null), 5000);
   };
+  
+  const borrarFotoAntigua = async (urlAntigua: string | null) => {
+  if (!urlAntigua) return;
 
+  try {
+    // Extraemos el path del archivo de la URL pública
+    // La URL suele ser: .../storage/v1/object/public/Fotos_Administrativos/staff/ID/nombre.jpg?t=...
+    const urlSinParams = urlAntigua.split('?')[0];
+    const partes = urlSinParams.split('Fotos_Administrativos/');
+    
+    if (partes.length > 1) {
+      const filePathParaBorrar = partes[1];
+      
+      const { error } = await supabaseAdmin.storage
+        .from('Fotos_Administrativos')
+        .remove([filePathParaBorrar]);
+
+      if (error) console.error("Error al borrar foto antigua:", error.message);
+      else console.log("✅ Foto antigua eliminada del Storage");
+    }
+  } catch (err) {
+    console.error("Error procesando borrado de foto:", err);
+  }
+};
   const ejecutarProcesoStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
@@ -84,8 +107,13 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       if (fotoArchivo && authUserId) {
         setStatusText('Subiendo foto...');
         
+        // 1. SI EXISTE UNA FOTO PREVIA, LA BORRAMOS DEL STORAGE
+        if (usuarioAEditar?.foto_url) {
+          await borrarFotoAntigua(usuarioAEditar.foto_url);
+        }
+
+        // 2. CONTINUAMOS CON LA SUBIDA NORMAL...
         const fileExt = fotoArchivo.name.split('.').pop();
-        // Generamos un nombre único con timestamp y random string para evitar caché agresiva
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `staff/${authUserId}/${fileName}`;
 
@@ -218,7 +246,10 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                 </div>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) setFotoPreview(URL.createObjectURL(file));
+                    if (file) {
+                        if (fotoPreview?.startsWith('blob:')) URL.revokeObjectURL(fotoPreview); // Limpia la anterior
+                        setFotoPreview(URL.createObjectURL(file));
+                    }
                 }} />
                 <p className="text-[9px] text-slate-500 mt-3 uppercase font-bold tracking-tighter italic">Foto de Identificación</p>
             </section>
