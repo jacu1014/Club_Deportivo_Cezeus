@@ -137,7 +137,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         }
       }
 
-      // --- PASO 3: BASE DE DATOS (TABLA USUARIOS) ---
+      // --- PASO 3: BASE DE DATOS (TABLA USUARIOS) --
       setStatusText('Guardando en DB...');
       const estadoSeleccionado = formData.get('estado')?.toString() || 'Activo';
 
