@@ -58,7 +58,7 @@ export const ROLE_PERMISSIONS: Record<string, PaginasApp[]> = {
     PaginasApp.ALUMNOS,
     PaginasApp.PAGOS, // <-- AHORA INCLUIDO PARA VER PAGOS PERSONALES
     PaginasApp.CALENDARIO,
-    PaginasApp.CONFIGURACION
+    PaginasApp.CONFIGURACION,
     PaginasApp.NOSOTROS
   ]
 };
