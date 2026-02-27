@@ -107,7 +107,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       if (fotoArchivo && authUserId) {
         setStatusText('Subiendo foto...');
         
-        // 1. SI EXISTE UNA FOTO PREVIA, LA BORRAMOS DEL STORAGE
+        // 1. SI EXISTE UNA FOTO PREVIA, LA BORRAMOS DEL STORAGE--
         if (usuarioAEditar?.foto_url) {
           await borrarFotoAntigua(usuarioAEditar.foto_url);
         }
