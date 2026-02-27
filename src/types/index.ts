@@ -15,7 +15,8 @@ export enum PaginasApp {
   PAGOS = 'pagos',
   CALENDARIO = 'calendar_today',
   NOTIFICACIONES = 'notifications_active',
-  CONFIGURACION = 'settings'
+  CONFIGURACION = 'settings',
+  NOSOTROS = 'info'
 }
 
 // Interfaces para TypeScript
@@ -47,7 +48,8 @@ export const ROLE_PERMISSIONS: Record<string, PaginasApp[]> = {
     PaginasApp.EVALUACION,
     PaginasApp.PAGOS, // <-- AHORA INCLUIDO PARA VER MOVIMIENTOS PROPIOS
     PaginasApp.CALENDARIO,
-    PaginasApp.CONFIGURACION
+    PaginasApp.CONFIGURACION,
+    PaginasApp.NOSOTROS
   ],
 
   // Permisos Mínimos para Alumno
@@ -57,5 +59,6 @@ export const ROLE_PERMISSIONS: Record<string, PaginasApp[]> = {
     PaginasApp.PAGOS, // <-- AHORA INCLUIDO PARA VER PAGOS PERSONALES
     PaginasApp.CALENDARIO,
     PaginasApp.CONFIGURACION
+    PaginasApp.NOSOTROS
   ]
 };

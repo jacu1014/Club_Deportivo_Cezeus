@@ -13,6 +13,7 @@ import Alumnos from './pages/Alumnos';
 import Configuracion from './pages/Configuracion'; 
 import PagosModule from './pages/PagosModule';
 import CalendarioPage from './pages/CalendarioPage';
+import Nosotros from './pages/Nosotros';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -96,6 +97,17 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
+          <Route 
+            path="/nosotros" 
+            element={
+              user && canAccess(PaginasApp.NOSOTROS) ? (
+                <MainLayout user={user}>
+                  <Nosotros />
+                </MainLayout>
+              ) : <Navigate to="/login" />
+            } 
+          />
+          
           <Route 
             path="/alumnos" 
             element={

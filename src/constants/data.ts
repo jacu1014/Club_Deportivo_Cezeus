@@ -53,6 +53,8 @@ export const ESTADOS_PAGO = [
 export const CATEGORIAS_FINANZAS = {
   INGRESO: [
     "Mensualidad",
+    "Media Mensualidad",
+    "Entrenamiento Individual",
     "Matrícula",
     "Uniforme",
     "Pago para Torneo",
