@@ -223,7 +223,7 @@ const CalendarioPage = ({ userRol }) => {
           </div>
         </div>
 
-        {/* CALENDARIO PRINCIPAL - CORRECCIÓN RESPONSIVE AQUÍ */}
+        {/* CALENDARIO PRINCIPAL */}
         <div className="order-1 lg:order-1 lg:col-span-3 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-4 md:p-8 shadow-2xl backdrop-blur-md relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
           
@@ -245,7 +245,6 @@ const CalendarioPage = ({ userRol }) => {
             {loading && <div className="text-[10px] font-black text-cyan-400 animate-pulse uppercase tracking-widest">Sincronizando...</div>}
           </div>
 
-          {/* INDICADOR VISUAL DE SCROLL (Solo Móvil) */}
           <div className="lg:hidden flex justify-end mb-2 animate-bounce">
             <div className="flex items-center gap-1 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1 rounded-full">
               <span className="text-[8px] font-black text-cyan-400 uppercase tracking-tighter">Desliza para ver más</span>
@@ -253,102 +252,107 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-         {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
-{/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
-<div className="w-full overflow-x-auto custom-scrollbar-h select-none">
-  {/* El min-width de 750px garantiza que los días no se aplasten demasiado */}
-  <div className="min-w-[750px] lg:min-w-full pb-4">
-    
-    {/* DÍAS DE LA SEMANA */}
-    <div className="grid grid-cols-7 border-b border-white/5 mb-2 text-center">
-      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
-        <div key={d} className="py-3 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">
-          {d}
-        </div>
-      ))}
-    </div>
-
-    {/* GRILLA DE DÍAS */}
-    <div className="grid grid-cols-7 border-l border-t border-white/5 rounded-br-3xl overflow-hidden">
-      {days.map((day, idx) => {
-        const eventosDelDia = eventosFiltrados.filter(ev => isSameDay(ev.fecha_inicio, day));
-        const numEventos = eventosDelDia.length;
-        const esHoy = isSameDay(day, new Date());
-        const esMesActual = isSameMonth(day, currentMonth);
-
-        return (
-          <div 
-            key={idx} 
-            className={`
-              border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col
-              min-h-[110px] md:min-h-[150px]
-              ${!esMesActual ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
-              ${esHoy ? 'bg-cyan-500/[0.05]' : ''}
-            `}
-          >
-            {/* NÚMERO DEL DÍA */}
-            <div className="flex justify-between items-center mb-2 px-1">
-              <span className={`text-[10px] md:text-[11px] font-black ${
-                esHoy ? 'text-cyan-400 bg-cyan-400/20 px-1.5 py-0.5 rounded-md shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-500'
-              }`}>
-                {format(day, 'd')}
-              </span>
-              
-              {/* Puntos rápidos para indicar que hay actividad (muy útil en móvil) */}
-              {numEventos > 0 && (
-                <div className="flex gap-0.5">
-                   {eventosDelDia.slice(0, 3).map(ev => (
-                     <div key={ev.id} className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: ev.color }} />
-                   ))}
-                </div>
-              )}
-            </div>
-            
-            {/* LISTADO DE EVENTOS DENTRO DEL DÍA */}
-            <div className="flex-1 flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-0.5">
-              {eventosDelDia.map(ev => {
-                const configCat = CATEGORIAS_EVENTOS.find(c => c.id.toUpperCase() === ev.categoria?.toUpperCase());
-                
-                return (
-                  <div 
-                    key={ev.id} 
-                    onClick={() => handleEditarEvento(ev)}
-                    className={`
-                      relative group px-2 py-1.5 rounded-lg border-l-2 text-left transition-all
-                      ${ev.esCumpleanios ? 'cursor-default' : 'cursor-pointer hover:translate-x-1 hover:bg-white/5'}
-                    `}
-                    style={{ 
-                      backgroundColor: `${ev.color}10`, 
-                      borderLeftColor: ev.color,
-                      color: ev.color 
-                    }}
-                  >
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className="material-symbols-outlined text-[12px] md:text-[14px] shrink-0">
-                        {ev.esCumpleanios ? 'cake' : (configCat?.icono || 'event')}
-                      </span>
-                      <span className="text-[8px] md:text-[9.5px] font-black uppercase truncate tracking-tighter leading-tight">
-                        {ev.titulo}
-                      </span>
-                    </div>
-                    
-                    {!ev.esCumpleanios && (
-                      <div className="flex items-center gap-1 mt-0.5 ml-4 opacity-60">
-                        <span className="text-[7px] font-bold">
-                          {format(ev.fecha_inicio, 'HH:mm')}
-                        </span>
-                      </div>
-                    )}
+          <div className="w-full overflow-x-auto custom-scrollbar-h select-none">
+           <div className="min-w-[700px] lg:min-w-full pb-4">
+              <div className="grid grid-cols-7 border-b border-white/5 mb-2 text-center">
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
+                  <div key={d} className="py-3 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">
+                    {d}
                   </div>
-                );
-              })}
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 auto-rows-[minmax(120px,auto)] border-l border-t border-white/5">
+                {days.map((day, idx) => {
+                  const eventosDelDia = eventosFiltrados.filter(ev => isSameDay(ev.fecha_inicio, day));
+                  const numEventos = eventosDelDia.length;
+                  const esHoy = isSameDay(day, new Date());
+                  const esMesActual = isSameMonth(day, currentMonth); // <--- DEFINICIÓN AGREGADA
+                  const esMuchosEventos = numEventos > 2;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`
+                        border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col
+                        min-h-[100px] md:min-h-[140px]
+                        ${!esMesActual ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
+                        ${esHoy ? 'bg-cyan-500/[0.05]' : ''}
+                      `}
+                    >
+                      <div className="flex justify-between items-center mb-1 px-1">
+                        <span className={`text-[10px] md:text-[11px] font-black ${
+                          esHoy ? 'text-cyan-400 bg-cyan-400/10 px-1.5 rounded-md' : 'text-slate-500'
+                        }`}>
+                          {format(day, 'd')}
+                        </span>
+                        {numEventos > 0 && (
+                          <div className="flex gap-0.5">
+                            {eventosDelDia.slice(0, 3).map(ev => (
+                              <div key={ev.id} className="w-1 h-1 rounded-full" style={{ backgroundColor: ev.color }} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className={`flex-1 flex gap-1.5 overflow-y-auto custom-scrollbar pr-0.5
+                        ${esMuchosEventos ? 'flex-row flex-wrap content-start' : 'flex-col'}
+                      `}>
+                        {eventosDelDia.map(ev => {
+                          const configCat = CATEGORIAS_EVENTOS.find(c => c.id.toUpperCase() === ev.categoria?.toUpperCase());
+                          
+                          return (
+                            <div 
+                              key={ev.id} 
+                              onClick={() => handleEditarEvento(ev)}
+                              className={`
+                                relative font-bold uppercase italic flex flex-col items-center justify-center
+                                border transition-all duration-300 shadow-sm shrink-0 overflow-hidden
+                                ${ev.esCumpleanios ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] active:scale-95 hover:shadow-xl hover:z-10'}
+                                ${esMuchosEventos 
+                                  ? 'w-[calc(50%-4px)] h-12 rounded-xl p-1' 
+                                  : numEventos === 2
+                                    ? 'w-full py-2 px-3 min-h-[48px] rounded-xl'
+                                    : 'w-full py-4 px-3 min-h-[65px] rounded-2xl'}
+                              `}
+                              style={{ 
+                                backgroundColor: `${ev.color}12`, 
+                                borderColor: `${ev.color}30`, 
+                                color: ev.color,
+                                borderTopWidth: esMuchosEventos ? '2px' : '4px',
+                                borderTopColor: ev.color,
+                              }}
+                            >
+                              <span className={`material-symbols-outlined leading-none shrink-0 ${esMuchosEventos ? 'text-[15px]' : 'text-[20px]'}`}>
+                                {ev.esCumpleanios ? 'cake' : (configCat?.icono || 'event')}
+                              </span>
+
+                              {!esMuchosEventos && (
+                                <span className={`tracking-tight font-black leading-tight text-center mt-1.5 break-words line-clamp-2 ${numEventos === 2 ? 'text-[8px]' : 'text-[10px]'}`}>
+                                  {ev.titulo}
+                                  {ev.esCumpleanios && ev.rolUsuario === 'ALUMNO' && ` (${ev.edadParaMostrar})`}
+                                </span>
+                              )}
+
+                              {!esMuchosEventos && !ev.esCumpleanios && (
+                                <div className="flex items-center gap-1 mt-1 opacity-70">
+                                  <span className="text-[7px] font-black bg-white/10 px-1.5 py-0.5 rounded-md">
+                                    {format(ev.fecha_inicio, 'HH:mm')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        );
-      })}
-    </div>
-  </div>
-</div>
+        </div>
+      </div>
 
       <ModalEvento 
         isOpen={showModal} 
