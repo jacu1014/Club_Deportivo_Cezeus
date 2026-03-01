@@ -13,11 +13,13 @@ const DashboardPage = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
   
-  // NUEVO: Estado para controlar qué fecha estamos viendo en el Dashboard
-  const [fechaConsulta, setFechaConsulta] = useState(format(new Date(), 'yyyy-MM-dd'));
+  // 1. Definimos la fecha de hoy como base
+  const fechaHoyStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  
+  // 2. Estado para la consulta (por defecto hoy)
+  const [fechaConsulta, setFechaConsulta] = useState(fechaHoyStr);
   
   const currentRole = user?.rol || 'ALUMNO';
-
   useEffect(() => { 
     fetchDatos();
     fetchCategorias();
@@ -185,7 +187,6 @@ const DashboardPage = ({ user }) => {
           <h2 className="text-white font-black text-4xl uppercase italic tracking-tighter leading-none">
             {['ALUMNO', 'ENTRENADOR'].includes(currentRole) ? 'Mi' : 'Panel'} <span className="text-cyan-400">Cezeus</span>
           </h2>
-          {/* Si es Admin, permite cambiar la fecha del Dashboard */}
           {!['ALUMNO', 'ENTRENADOR'].includes(currentRole) ? (
             <input 
               type="date" 
@@ -210,18 +211,15 @@ const DashboardPage = ({ user }) => {
           <DashboardCard title="Alumnos" count={stats.alumnosPres} label="Hoy" icon="groups" color="text-cyan-400" btnText="Pasar/Editar Lista" onBtnClick={() => handleOpen('ALUMNO')} />
           <DashboardCard title="Staff" count={stats.staffPres} label="Hoy" icon="badge" color="text-emerald-400" btnText="Gestionar Staff" onBtnClick={() => handleOpen('STAFF')} />
 
-          {/* Sección de Reportes Mejorada */}
           <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between">
             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Exportar Reporte</p>
             
             <div className="space-y-2 mb-4">
-              {/* NUEVO: Selector de Rol */}
               <select id="filtro_rol_pdf" className="w-full bg-white/10 border border-white/10 rounded-xl p-2 text-[10px] text-white outline-none focus:border-cyan-400 font-bold uppercase">
                 <option value="ALUMNO">LISTADO DE ALUMNOS</option>
                 <option value="STAFF">TODO EL STAFF</option>
               </select>
 
-              {/* Selector de Categoría (Solo relevante para Alumnos) */}
               <select id="filtro_categoria_pdf" className="w-full bg-white/10 border border-white/10 rounded-xl p-2 text-[10px] text-white outline-none focus:border-cyan-400 font-bold uppercase">
                 <option value="TODAS">TODAS LAS CATEGORÍAS</option>
                 {categorias.map(cat => (
@@ -230,8 +228,9 @@ const DashboardPage = ({ user }) => {
               </select>
 
               <div className="flex gap-2">
-                <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={hoyFecha}/>
-                <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={hoyFecha}/>
+                {/* CORREGIDO: Usamos fechaConsulta como valor por defecto */}
+                <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={fechaConsulta}/>
+                <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={fechaConsulta}/>
               </div>
             </div>
 
@@ -285,7 +284,7 @@ const DashboardPage = ({ user }) => {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         tipo={tipoSeleccionado}
-        fechaInicial={fechaConsulta} // Ahora el modal abre en la fecha que estás viendo
+        fechaInicial={fechaConsulta} 
         onSaveSuccess={fetchDatos} 
       />
     </div>
