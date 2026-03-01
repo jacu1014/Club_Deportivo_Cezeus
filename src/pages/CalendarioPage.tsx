@@ -253,98 +253,101 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-          {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
-          <div className="w-full overflow-x-auto custom-scrollbar-h">
-            <div className="min-w-[800px] lg:min-w-full pb-4">
-              <div className="grid grid-cols-7 border-b border-white/5 mb-4 text-center">
-                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
-                  <div key={d} className="py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">{d}</div>
-                ))}
-              </div>
+         {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
+<div className="w-full overflow-x-auto custom-scrollbar-h select-none">
+  {/* El min-width de 750px garantiza que los días no se aplasten demasiado */}
+  <div className="min-w-[750px] lg:min-w-full pb-4">
+    
+    {/* DÍAS DE LA SEMANA */}
+    <div className="grid grid-cols-7 border-b border-white/5 mb-2 text-center">
+      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
+        <div key={d} className="py-3 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">
+          {d}
+        </div>
+      ))}
+    </div>
 
-              <div className="grid grid-cols-7 auto-rows-[minmax(120px,auto)] border-l border-t border-white/5">
-                {days.map((day, idx) => {
-                  const eventosDelDia = eventosFiltrados.filter(ev => isSameDay(ev.fecha_inicio, day));
-                  const numEventos = eventosDelDia.length;
-                  const esMuchosEventos = numEventos > 2;
+    {/* GRILLA DE DÍAS */}
+    <div className="grid grid-cols-7 border-l border-t border-white/5 rounded-br-3xl overflow-hidden">
+      {days.map((day, idx) => {
+        const eventosDelDia = eventosFiltrados.filter(ev => isSameDay(ev.fecha_inicio, day));
+        const numEventos = eventosDelDia.length;
+        const esHoy = isSameDay(day, new Date());
+        const esMesActual = isSameMonth(day, currentMonth);
 
-                  return (
-                    <div 
-                      key={idx} 
-                      className={`border-r border-b border-white/5 p-1.5 transition-all relative group flex flex-col h-full min-h-[130px]
-                        ${!isSameMonth(day, currentMonth) ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
-                        ${isSameDay(day, new Date()) ? 'bg-cyan-500/[0.07]' : ''}
-                      `}
-                    >
-                      <div className="flex justify-between items-center mb-1.5 px-1">
-                        <span className={`text-[10px] font-black ${isSameDay(day, new Date()) ? 'text-cyan-400 underline decoration-2 underline-offset-4' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                          {format(day, 'd')}
-                        </span>
-                        {numEventos > 3 && (
-                          <span className="text-[8px] font-bold text-cyan-400/50">
-                            {numEventos} EV
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className={`flex-1 flex gap-1.5 overflow-y-auto custom-scrollbar pr-0.5
-                        ${esMuchosEventos ? 'flex-row flex-wrap content-start' : 'flex-col'}
-                      `}>
-                        {eventosDelDia.map(ev => {
-                          const configCat = CATEGORIAS_EVENTOS.find(c => c.id.toUpperCase() === ev.categoria?.toUpperCase());
-                          
-                          return (
-                            <div 
-                              key={ev.id} 
-                              onClick={() => handleEditarEvento(ev)}
-                              className={`
-                                relative font-bold uppercase italic flex flex-col items-center justify-center
-                                border transition-all duration-300 shadow-sm shrink-0 overflow-hidden
-                                ${ev.esCumpleanios ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] active:scale-95 hover:shadow-xl hover:z-10'}
-                                ${esMuchosEventos 
-                                  ? 'w-[calc(50%-4px)] h-12 rounded-xl p-1' 
-                                  : numEventos === 2
-                                    ? 'w-full py-2 px-3 min-h-[48px] rounded-xl'
-                                    : 'w-full py-4 px-3 min-h-[65px] rounded-2xl'}
-                              `}
-                              style={{ 
-                                backgroundColor: `${ev.color}12`, 
-                                borderColor: `${ev.color}30`, 
-                                color: ev.color,
-                                borderTopWidth: esMuchosEventos ? '2px' : '4px',
-                                borderTopColor: ev.color,
-                              }}
-                            >
-                              <span className={`material-symbols-outlined leading-none shrink-0 ${esMuchosEventos ? 'text-[15px]' : 'text-[20px]'}`}>
-                                {ev.esCumpleanios ? 'cake' : (configCat?.icono || 'event')}
-                              </span>
-
-                              {!esMuchosEventos && (
-                                <span className={`tracking-tight font-black leading-tight text-center mt-1.5 break-words line-clamp-2 ${numEventos === 2 ? 'text-[8px]' : 'text-[10px]'}`}>
-                                  {ev.titulo}
-                                  {ev.esCumpleanios && ev.rolUsuario === 'ALUMNO' && ` (${ev.edadParaMostrar})`}
-                                </span>
-                              )}
-
-                              {!esMuchosEventos && !ev.esCumpleanios && (
-                                <div className="flex items-center gap-1 mt-1 opacity-70">
-                                  <span className="text-[7px] font-black bg-white/10 px-1.5 py-0.5 rounded-md">
-                                    {format(ev.fecha_inicio, 'HH:mm')}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+        return (
+          <div 
+            key={idx} 
+            className={`
+              border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col
+              min-h-[110px] md:min-h-[150px]
+              ${!esMesActual ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
+              ${esHoy ? 'bg-cyan-500/[0.05]' : ''}
+            `}
+          >
+            {/* NÚMERO DEL DÍA */}
+            <div className="flex justify-between items-center mb-2 px-1">
+              <span className={`text-[10px] md:text-[11px] font-black ${
+                esHoy ? 'text-cyan-400 bg-cyan-400/20 px-1.5 py-0.5 rounded-md shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-500'
+              }`}>
+                {format(day, 'd')}
+              </span>
+              
+              {/* Puntos rápidos para indicar que hay actividad (muy útil en móvil) */}
+              {numEventos > 0 && (
+                <div className="flex gap-0.5">
+                   {eventosDelDia.slice(0, 3).map(ev => (
+                     <div key={ev.id} className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: ev.color }} />
+                   ))}
+                </div>
+              )}
+            </div>
+            
+            {/* LISTADO DE EVENTOS DENTRO DEL DÍA */}
+            <div className="flex-1 flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-0.5">
+              {eventosDelDia.map(ev => {
+                const configCat = CATEGORIAS_EVENTOS.find(c => c.id.toUpperCase() === ev.categoria?.toUpperCase());
+                
+                return (
+                  <div 
+                    key={ev.id} 
+                    onClick={() => handleEditarEvento(ev)}
+                    className={`
+                      relative group px-2 py-1.5 rounded-lg border-l-2 text-left transition-all
+                      ${ev.esCumpleanios ? 'cursor-default' : 'cursor-pointer hover:translate-x-1 hover:bg-white/5'}
+                    `}
+                    style={{ 
+                      backgroundColor: `${ev.color}10`, 
+                      borderLeftColor: ev.color,
+                      color: ev.color 
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <span className="material-symbols-outlined text-[12px] md:text-[14px] shrink-0">
+                        {ev.esCumpleanios ? 'cake' : (configCat?.icono || 'event')}
+                      </span>
+                      <span className="text-[8px] md:text-[9.5px] font-black uppercase truncate tracking-tighter leading-tight">
+                        {ev.titulo}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
+                    
+                    {!ev.esCumpleanios && (
+                      <div className="flex items-center gap-1 mt-0.5 ml-4 opacity-60">
+                        <span className="text-[7px] font-bold">
+                          {format(ev.fecha_inicio, 'HH:mm')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
 
       <ModalEvento 
         isOpen={showModal} 
