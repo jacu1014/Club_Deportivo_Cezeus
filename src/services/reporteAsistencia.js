@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 // Importante: Asegúrate que la ruta sea correcta. Si da error, usa una URL o base64.
-import logoCezeus from '../assets/Logo_Cezeus.jpeg'; 
+import logoCezeus from '../components/Logo_Cezeus.jpeg';
 
 export const generarReporteAsistencia = async (titulo, datos, fechas) => {
   try {
@@ -11,9 +11,12 @@ export const generarReporteAsistencia = async (titulo, datos, fechas) => {
     // 1. Logo y Encabezado con manejo de errores
     try {
       // Si logoCezeus es un import de Vite/Webpack, a veces requiere cargarlo como imagen primero
-      doc.addImage(logoCezeus, 'JPEG', 14, 10, 22, 22); 
+    if (logoCezeus) {
+        doc.addImage(logoCezeus, 'JPEG', 14, 10, 22, 22);
+    }
     } catch (e) {
-      console.warn("No se pudo cargar el logo en el PDF", e);
+    console.error("Error cargando el logo:", e);
+    // El PDF continuará generándose incluso si el logo falla
     }
 
     // Estilo de Título Principal
