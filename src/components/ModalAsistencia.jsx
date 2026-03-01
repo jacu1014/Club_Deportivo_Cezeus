@@ -77,21 +77,27 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
   const registrarAsistencia = async (uId, estado) => {
     try {
       setSaving(true);
-      // Corrección de nombre de tabla a 'asistencias'
-      const { error } = await supabase.from('asistencias').upsert({
-        usuario_id: uId,
-        fecha: fechaRegistro,
-        estado: estado,
-        tipo_event: 'DIARIO'
-      }, { onConflict: 'usuario_id,fecha' });
+      
+      // UPSERT corregido para coincidir con la restricción única
+      const { error } = await supabase
+        .from('asistencias')
+        .upsert(
+          {
+            usuario_id: uId,
+            fecha: fechaRegistro,
+            estado: estado,
+            tipo_event: 'DIARIO'
+          }, 
+          { onConflict: 'usuario_id,fecha' } // Debe coincidir exactamente con el CONSTRAINT de SQL
+        );
 
       if (error) throw error;
 
-      // Feedback visual: Mostrar Toast
+      // Feedback visual: Toast
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2000);
 
-      // Actualización local
+      // Actualización local para que el círculo cambie de color inmediatamente
       setAsistencias(prev => {
         const existe = prev.find(a => a.usuario_id === uId);
         if (existe) {
@@ -103,7 +109,8 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
       if (onSaveSuccess) onSaveSuccess();
       
     } catch (err) {
-      alert("Error: " + err.message);
+      console.error("Error al registrar:", err.message);
+      alert("Error de base de datos: " + err.message);
     } finally {
       setSaving(false);
     }
