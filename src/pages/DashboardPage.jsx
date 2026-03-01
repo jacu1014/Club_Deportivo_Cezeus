@@ -13,14 +13,15 @@ const DashboardPage = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
   
-  // Usamos la fecha local para las consultas diarias
-  const hoyFecha = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  // NUEVO: Estado para controlar qué fecha estamos viendo en el Dashboard
+  const [fechaConsulta, setFechaConsulta] = useState(format(new Date(), 'yyyy-MM-dd'));
+  
   const currentRole = user?.rol || 'ALUMNO';
 
   useEffect(() => { 
     fetchDatos();
     fetchCategorias();
-  }, [hoyFecha, currentRole]);
+  }, [fechaConsulta, currentRole]);
 
   // 1. OBTENER CATEGORÍAS REALES
   const fetchCategorias = async () => {
@@ -41,20 +42,18 @@ const DashboardPage = ({ user }) => {
   };
 
   // 2. FETCH DATOS (TABLA: asistencias)
-  const fetchDatos = async () => {
+ const fetchDatos = async () => {
     setLoading(true);
     try {
-      // Cambio clave: 'asistencias' en plural
       let query = supabase.from('asistencias').select('*, usuarios(*)');
 
       if (['ALUMNO', 'ENTRENADOR'].includes(currentRole)) {
-        // Vista personal: historial del mes
         const inicioMes = startOfMonth(new Date()).toISOString().split('T')[0];
         const finMes = endOfMonth(new Date()).toISOString().split('T')[0];
         query = query.eq('usuario_id', user.id).gte('fecha', inicioMes).lte('fecha', finMes);
       } else {
-        // Vista Admin: registros de hoy
-        query = query.eq('fecha', hoyFecha);
+        // CORRECCIÓN: Usar fechaConsulta en lugar de hoyFecha fijo
+        query = query.eq('fecha', fechaConsulta);
       }
 
       const { data, error } = await query.order('fecha', { ascending: false });
@@ -66,59 +65,98 @@ const DashboardPage = ({ user }) => {
       setLoading(false);
     }
   };
-
   // 3. EXPORTAR PDF (TABLA: asistencias)
   const handleExportarPDF = async () => {
-    const fInicio = document.getElementById('fecha_inicio').value;
-    const fFin = document.getElementById('fecha_fin').value;
-    const catFiltro = document.getElementById('filtro_categoria_pdf').value;
+  // 1. Capturar valores de los inputs
+  const fInicio = document.getElementById('fecha_inicio').value;
+  const fFin = document.getElementById('fecha_fin').value;
+  const catFiltro = document.getElementById('filtro_categoria_pdf').value;
+  const rolFiltro = document.getElementById('filtro_rol_pdf')?.value || 'ALUMNO'; // Captura el nuevo select
 
-    if (!fInicio || !fFin) return alert("Por favor selecciona el rango de fechas.");
+  if (!fInicio || !fFin) return alert("Por favor selecciona el rango de fechas.");
 
-    setExportLoading(true);
-    try {
-      // Cambio clave: 'asistencias' en plural
-      let query = supabase
-        .from('asistencias')
-        .select(`
-          fecha, 
-          estado, 
-          usuarios!inner(primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol, categoria)
-        `)
-        .eq('usuarios.rol', 'ALUMNO')
-        .gte('fecha', fInicio)
-        .lte('fecha', fFin);
+  setExportLoading(true);
+  try {
+    // 2. Construir Query Base (Tabla: asistencias)
+    let query = supabase
+      .from('asistencias')
+      .select(`
+        fecha, 
+        estado, 
+        usuarios!inner(
+          primer_nombre, 
+          segundo_nombre, 
+          primer_apellido, 
+          segundo_apellido, 
+          rol, 
+          categoria
+        )
+      `)
+      .gte('fecha', fInicio)
+      .lte('fecha', fFin);
 
+    // 3. Aplicar Filtros de Rol y Categoría
+    if (rolFiltro === 'ALUMNO') {
+      // Filtrar por rol ALUMNO y opcionalmente por categoría
+      query = query.eq('usuarios.rol', 'ALUMNO');
       if (catFiltro !== 'TODAS') {
         query = query.eq('usuarios.categoria', catFiltro);
       }
-
-      const { data: raw, error } = await query.order('fecha', { ascending: true });
-
-      if (error) throw error;
-      if (!raw || raw.length === 0) return alert("No se encontraron registros para este filtro.");
-
-      // Procesar datos para el reporte
-      const fechasUnicas = [...new Set(raw.map(a => a.fecha))];
-      const mapaAlumnos = {};
-      
-      raw.forEach(reg => {
-        const u = reg.usuarios;
-        const nombre = `${u.primer_nombre} ${u.primer_apellido}`.trim();
-        if (!mapaAlumnos[nombre]) {
-          mapaAlumnos[nombre] = { nombreCompleto: nombre, asistencias: {} };
-        }
-        mapaAlumnos[nombre].asistencias[reg.fecha] = reg.estado;
-      });
-
-      const titulo = catFiltro === 'TODAS' ? `General` : `Cat. ${catFiltro}`;
-      await generarReporteAsistencia(`Reporte ${titulo} (${fInicio} a ${fFin})`, Object.values(mapaAlumnos), fechasUnicas);
-    } catch (err) {
-      alert("Error en reporte: " + err.message);
-    } finally {
-      setExportLoading(false);
+    } else {
+      // Filtrar todo el Staff (Excluir Alumnos)
+      query = query.neq('usuarios.rol', 'ALUMNO');
     }
-  };
+
+    const { data: raw, error } = await query.order('fecha', { ascending: true });
+
+    if (error) throw error;
+    if (!raw || raw.length === 0) {
+      return alert(`No se encontraron registros de ${rolFiltro === 'ALUMNO' ? 'Alumnos' : 'Staff'} para este rango.`);
+    }
+
+    // 4. Procesar datos para la estructura del reporte
+    // Extraemos las fechas únicas presentes en los datos
+    const fechasUnicas = [...new Set(raw.map(a => a.fecha))].sort();
+    
+    const mapaRegistros = {};
+    
+    raw.forEach(reg => {
+      const u = reg.usuarios;
+      // Nombre completo para la fila del PDF
+      const nombre = `${u.primer_nombre} ${u.primer_apellido}`.toUpperCase().trim();
+      
+      if (!mapaRegistros[nombre]) {
+        mapaRegistros[nombre] = { 
+          nombreCompleto: nombre, 
+          asistencias: {} 
+        };
+      }
+      // Guardamos el estado (PRESENTE/AUSENTE) asociado a la fecha
+      mapaRegistros[nombre].asistencias[reg.fecha] = reg.estado;
+    });
+
+    // 5. Definir Título dinámico para el PDF
+    let subtitulo = "";
+    if (rolFiltro === 'ALUMNO') {
+      subtitulo = catFiltro === 'TODAS' ? "Alumnos General" : `Alumnos Cat. ${catFiltro}`;
+    } else {
+      subtitulo = "Personal Staff";
+    }
+
+    // 6. Ejecutar servicio de generación
+    await generarReporteAsistencia(
+      `${subtitulo} (${fInicio} a ${fFin})`, 
+      Object.values(mapaRegistros), 
+      fechasUnicas
+    );
+
+  } catch (err) {
+    console.error("Error en reporte:", err);
+    alert("Error al generar el reporte: " + err.message);
+  } finally {
+    setExportLoading(false);
+  }
+};
 
   // 4. ESTADÍSTICAS EN TIEMPO REAL
   const stats = useMemo(() => {
@@ -138,18 +176,28 @@ const DashboardPage = ({ user }) => {
     setIsModalOpen(true);
   };
 
-  return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-10 text-slate-200 animate-in fade-in duration-700">
+ return (
+    <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-10 text-slate-200">
       
-      {/* HEADER */}
+      {/* HEADER con Selector de Fecha para el Admin */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-8">
         <div>
           <h2 className="text-white font-black text-4xl uppercase italic tracking-tighter leading-none">
             {['ALUMNO', 'ENTRENADOR'].includes(currentRole) ? 'Mi' : 'Panel'} <span className="text-cyan-400">Cezeus</span>
           </h2>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2 italic">
-            {format(new Date(), "EEEE dd 'de' MMMM", { locale: es })}
-          </p>
+          {/* Si es Admin, permite cambiar la fecha del Dashboard */}
+          {!['ALUMNO', 'ENTRENADOR'].includes(currentRole) ? (
+            <input 
+              type="date" 
+              value={fechaConsulta}
+              onChange={(e) => setFechaConsulta(e.target.value)}
+              className="bg-transparent text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em] mt-2 border-none outline-none cursor-pointer"
+            />
+          ) : (
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2 italic">
+              {format(new Date(), "EEEE dd 'de' MMMM", { locale: es })}
+            </p>
+          )}
         </div>
         <button onClick={fetchDatos} className="p-3 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group">
           <span className={`material-symbols-outlined text-cyan-400 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`}>refresh</span>
@@ -162,25 +210,35 @@ const DashboardPage = ({ user }) => {
           <DashboardCard title="Alumnos" count={stats.alumnosPres} label="Hoy" icon="groups" color="text-cyan-400" btnText="Pasar/Editar Lista" onBtnClick={() => handleOpen('ALUMNO')} />
           <DashboardCard title="Staff" count={stats.staffPres} label="Hoy" icon="badge" color="text-emerald-400" btnText="Gestionar Staff" onBtnClick={() => handleOpen('STAFF')} />
 
+          {/* Sección de Reportes Mejorada */}
           <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between">
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Reportes PDF</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Exportar Reporte</p>
+            
             <div className="space-y-2 mb-4">
-              <select id="filtro_categoria_pdf" className="w-full bg-white/10 border border-white/10 rounded-xl p-2 text-[10px] text-white outline-none focus:border-cyan-400 uppercase font-bold">
+              {/* NUEVO: Selector de Rol */}
+              <select id="filtro_rol_pdf" className="w-full bg-white/10 border border-white/10 rounded-xl p-2 text-[10px] text-white outline-none focus:border-cyan-400 font-bold uppercase">
+                <option value="ALUMNO">LISTADO DE ALUMNOS</option>
+                <option value="STAFF">TODO EL STAFF</option>
+              </select>
+
+              {/* Selector de Categoría (Solo relevante para Alumnos) */}
+              <select id="filtro_categoria_pdf" className="w-full bg-white/10 border border-white/10 rounded-xl p-2 text-[10px] text-white outline-none focus:border-cyan-400 font-bold uppercase">
                 <option value="TODAS">TODAS LAS CATEGORÍAS</option>
                 {categorias.map(cat => (
                   <option key={cat} value={cat}>{cat.toUpperCase()}</option>
                 ))}
               </select>
+
               <div className="flex gap-2">
                 <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={hoyFecha}/>
                 <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={hoyFecha}/>
               </div>
             </div>
-            <button onClick={handleExportarPDF} disabled={exportLoading} className="w-full bg-emerald-500 text-black py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-emerald-400 transition-all disabled:opacity-50">
-              {exportLoading ? 'Generando...' : 'Exportar PDF'}
+
+            <button onClick={handleExportarPDF} disabled={exportLoading} className="w-full bg-emerald-500 text-black py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-emerald-400 transition-all">
+              {exportLoading ? 'Generando...' : 'Generar PDF'}
             </button>
           </div>
-
           <RecentActivity asistencias={asistencias} />
         </div>
       )}
@@ -227,8 +285,8 @@ const DashboardPage = ({ user }) => {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         tipo={tipoSeleccionado}
-        fechaInicial={hoyFecha}
-        onSaveSuccess={fetchDatos} // Esto actualiza el dashboard al cerrar el modal
+        fechaInicial={fechaConsulta} // Ahora el modal abre en la fecha que estás viendo
+        onSaveSuccess={fetchDatos} 
       />
     </div>
   );
