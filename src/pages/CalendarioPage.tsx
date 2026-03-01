@@ -252,12 +252,13 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-          <div className="w-full overflow-x-auto custom-scrollbar-h select-none">
-           <div className="min-w-[700px] lg:min-w-full pb-4">
+            <div className="w-full select-none"> 
+              <div className="w-full pb-4">
               <div className="grid grid-cols-7 border-b border-white/5 mb-2 text-center">
-                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
-                  <div key={d} className="py-3 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">
-                    {d}
+                {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
+                  <div key={i} className="py-3 text-[10px] font-black uppercase text-slate-500">
+                    <span className="hidden md:inline">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i]}</span>
+                    <span className="md:hidden">{d}</span>
                   </div>
                 ))}
               </div>
@@ -275,7 +276,7 @@ const CalendarioPage = ({ userRol }) => {
                       key={idx} 
                       className={`
                         border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col
-                        min-h-[100px] md:min-h-[140px]
+                        min-h-[80px] md:min-h-[140px]
                         ${!esMesActual ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
                         ${esHoy ? 'bg-cyan-500/[0.05]' : ''}
                       `}
