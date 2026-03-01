@@ -14,6 +14,7 @@ import Configuracion from './pages/Configuracion';
 import PagosModule from './pages/PagosModule';
 import CalendarioPage from './pages/CalendarioPage';
 import Nosotros from './pages/Nosotros';
+import DashboardPage from './pages/DashboardPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -96,6 +97,18 @@ function App() {
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* --- NUEVA RUTA: DASHBOARD --- */}
+          <Route 
+            path="/dashboard" 
+            element={
+              user && canAccess(PaginasApp.DASHBOARD) ? (
+                <MainLayout user={user}>
+                  <DashboardPage user={user} />
+                </MainLayout>
+              ) : <Navigate to="/login" />
+            } 
+          />
 
           <Route 
             path="/nosotros" 
