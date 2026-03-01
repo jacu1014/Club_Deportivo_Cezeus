@@ -254,6 +254,7 @@ const CalendarioPage = ({ userRol }) => {
           </div>
 
          {/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
+{/* CONTENEDOR CON SCROLL HORIZONTAL PARA MÓVIL */}
 <div className="w-full overflow-x-auto custom-scrollbar-h select-none">
   {/* El min-width de 750px garantiza que los días no se aplasten demasiado */}
   <div className="min-w-[750px] lg:min-w-full pb-4">
