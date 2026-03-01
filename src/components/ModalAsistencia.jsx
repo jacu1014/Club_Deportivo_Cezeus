@@ -4,12 +4,13 @@ import { supabase } from '../lib/supabaseClient';
 const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [asistencias, setAsistencias] = useState([]);
+  const [categorias, setCategorias] = useState([]); // Para el filtro dinámico
+  const [categoriaSel, setCategoriaSel] = useState('TODAS');
   const [busqueda, setBusqueda] = useState('');
   const [fechaRegistro, setFechaRegistro] = useState(fechaInicial);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Sincronizar fecha inicial cuando el modal se abre
   useEffect(() => {
     if (isOpen) {
       setFechaRegistro(fechaInicial);
@@ -21,9 +22,9 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
     try {
       setLoading(true);
       
-      // 1. Cargar usuarios con todos los campos de nombre para la búsqueda avanzada
+      // 1. Cargar usuarios incluyendo la columna 'categoria'
       let query = supabase.from('usuarios')
-        .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol');
+        .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol, categoria');
       
       if (tipo === 'ALUMNO') {
         query = query.eq('rol', 'ALUMNO');
@@ -33,9 +34,16 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
       
       const { data: dataUsr, error: errUsr } = await query;
       if (errUsr) throw errUsr;
+      
       setUsuarios(dataUsr || []);
 
-      // 2. Cargar asistencias registradas para la fecha seleccionada en el input
+      // Extraer categorías únicas para el filtro rápido
+      if (tipo === 'ALUMNO') {
+        const cats = [...new Set(dataUsr.map(u => u.categoria).filter(Boolean))].sort();
+        setCategorias(cats);
+      }
+
+      // 2. Cargar asistencias de la fecha elegida
       const { data: dataAsis, error: errAsis } = await supabase
         .from('asistencia')
         .select('usuario_id, estado')
@@ -51,16 +59,24 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
     }
   };
 
-  // Búsqueda inteligente por cualquier parte del nombre completo
+  // Búsqueda + Filtro de Categoría
   const usuariosFiltrados = useMemo(() => {
-    const term = busqueda.toLowerCase().trim();
-    if (!term) return usuarios;
+    let filtrados = usuarios;
 
-    return usuarios.filter(u => {
-      const full = `${u.primer_nombre} ${u.segundo_nombre || ''} ${u.primer_apellido} ${u.segundo_apellido || ''}`.toLowerCase();
-      return full.includes(term);
-    });
-  }, [busqueda, usuarios]);
+    if (categoriaSel !== 'TODAS') {
+      filtrados = filtrados.filter(u => u.categoria === categoriaSel);
+    }
+
+    const term = busqueda.toLowerCase().trim();
+    if (term) {
+      filtrados = filtrados.filter(u => {
+        const full = `${u.primer_nombre} ${u.segundo_nombre || ''} ${u.primer_apellido} ${u.segundo_apellido || ''}`.toLowerCase();
+        return full.includes(term);
+      });
+    }
+
+    return filtrados;
+  }, [busqueda, usuarios, categoriaSel]);
 
   const registrarAsistencia = async (uId, estado) => {
     try {
@@ -74,7 +90,7 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
 
       if (error) throw error;
 
-      // Actualizar estado local para feedback visual inmediato
+      // Actualización local para velocidad
       setAsistencias(prev => {
         const existe = prev.find(a => a.usuario_id === uId);
         if (existe) {
@@ -83,11 +99,10 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
         return [...prev, { usuario_id: uId, estado }];
       });
 
-      // Notificar al Dashboard para actualizar contadores
       if (onSaveSuccess) onSaveSuccess();
       
     } catch (err) {
-      alert("Error al guardar asistencia: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -97,99 +112,107 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Overlay con desenfoque */}
       <div className="absolute inset-0 bg-[#05080d]/95 backdrop-blur-md" onClick={onClose}></div>
       
       <div className="relative bg-[#0a1118] border border-white/10 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
         
-        {/* HEADER: Selector de fecha y Buscador */}
+        {/* HEADER */}
         <div className={`p-6 border-b border-white/5 space-y-4 ${tipo === 'ALUMNO' ? 'bg-cyan-400/5' : 'bg-emerald-500/5'}`}>
           <div className="flex justify-between items-center">
             <div>
               <h4 className="text-white font-black text-xl italic uppercase tracking-tighter">
-                Control de <span className={tipo === 'ALUMNO' ? 'text-cyan-400' : 'text-emerald-400'}>{tipo}</span>
+                Lista de <span className={tipo === 'ALUMNO' ? 'text-cyan-400' : 'text-emerald-400'}>{tipo}s</span>
               </h4>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em]">Registro de asistencia</p>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{fechaRegistro}</p>
             </div>
-            <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
-              <span className="material-symbols-outlined">close</span>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
+              <span className="material-symbols-outlined text-sm">close</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Input de Fecha */}
-            <div className="relative group">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400 text-sm">calendar_today</span>
+          <div className="flex flex-col gap-3">
+            {/* Filtro por Categoría (Solo Alumnos) */}
+            {tipo === 'ALUMNO' && (
+              <select 
+                value={categoriaSel}
+                onChange={(e) => setCategoriaSel(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-[10px] font-black text-cyan-400 focus:outline-none focus:border-cyan-400/50 uppercase"
+              >
+                <option value="TODAS">TODAS LAS CATEGORÍAS</option>
+                {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input 
                 type="date" 
                 value={fechaRegistro}
                 onChange={(e) => setFechaRegistro(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-[11px] font-black text-white focus:outline-none focus:border-cyan-400/50 transition-all uppercase"
+                className="bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 text-[11px] font-black text-white focus:outline-none focus:border-white/30"
               />
-            </div>
-            {/* Input de Búsqueda */}
-            <div className="relative group">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm group-focus-within:text-white transition-colors">search</span>
               <input 
                 type="text"
-                placeholder="BUSCAR POR NOMBRE..."
+                placeholder="BUSCAR NOMBRE..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-[11px] font-black text-white placeholder:text-slate-600 focus:outline-none focus:border-white/30 transition-all uppercase tracking-widest"
+                className="bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 text-[11px] font-black text-white placeholder:text-slate-600 focus:outline-none focus:border-white/30 uppercase"
               />
             </div>
           </div>
         </div>
 
-        {/* LISTA DE USUARIOS */}
-        <div className="p-6 max-h-[50vh] overflow-y-auto space-y-2 custom-scrollbar">
+        {/* LISTA */}
+        <div className="p-4 max-h-[45vh] overflow-y-auto space-y-2 custom-scrollbar">
           {loading ? (
-            <div className="py-10 text-center text-cyan-400 animate-pulse text-[10px] font-black uppercase tracking-widest">Sincronizando base de datos...</div>
+            <div className="py-20 flex flex-col items-center gap-4">
+              <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-[10px] font-black text-slate-500 uppercase">Cargando base de datos...</p>
+            </div>
           ) : usuariosFiltrados.length > 0 ? (
             usuariosFiltrados.map(u => {
               const asis = asistencias.find(a => a.usuario_id === u.id);
               return (
-                <div key={u.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all group">
+                <div key={u.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-3xl border border-white/5 hover:bg-white/5 transition-all">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-white uppercase italic">
-                      {u.primer_nombre} {u.segundo_nombre && `${u.segundo_nombre[0]}.`} {u.primer_apellido}
+                    <span className="text-[11px] font-black text-white uppercase italic leading-tight">
+                      {u.primer_nombre} {u.primer_apellido}
                     </span>
-                    <span className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">{u.rol}</span>
+                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">
+                      {u.categoria || u.rol}
+                    </span>
                   </div>
                   
                   <div className="flex gap-2">
                     <button 
                       disabled={saving}
                       onClick={() => registrarAsistencia(u.id, 'PRESENTE')}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${asis?.estado === 'PRESENTE' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/40' : 'bg-white/5 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10'}`}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${asis?.estado === 'PRESENTE' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-slate-500 hover:bg-emerald-500/10'}`}
                     >
-                      <span className="material-symbols-outlined text-lg font-black">check</span>
+                      <span className="material-symbols-outlined text-xl">done_all</span>
                     </button>
                     <button 
                       disabled={saving}
                       onClick={() => registrarAsistencia(u.id, 'AUSENTE')}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${asis?.estado === 'AUSENTE' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/40' : 'bg-white/5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10'}`}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${asis?.estado === 'AUSENTE' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-white/5 text-slate-500 hover:bg-rose-500/10'}`}
                     >
-                      <span className="material-symbols-outlined text-lg font-black">close</span>
+                      <span className="material-symbols-outlined text-xl">close</span>
                     </button>
                   </div>
                 </div>
               );
             })
           ) : (
-            <div className="py-10 text-center">
-              <p className="text-slate-600 text-[10px] font-black uppercase italic tracking-widest">Sin resultados coincidentes</p>
-            </div>
+            <div className="py-10 text-center text-slate-600 text-[10px] font-black uppercase">Sin resultados</div>
           )}
         </div>
 
         {/* FOOTER */}
-        <div className="p-6 bg-black/20 text-center border-t border-white/5">
+        <div className="p-6 bg-black/40 border-t border-white/5 flex justify-center">
           <button 
             onClick={onClose}
-            className="text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors"
+            className="px-8 py-3 bg-white/5 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest hover:bg-white/10 transition-all border border-white/10"
           >
-            Finalizar sesión de registro
+            Cerrar Lista
           </button>
         </div>
       </div>
