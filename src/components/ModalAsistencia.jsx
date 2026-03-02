@@ -13,11 +13,11 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
   const [showToast, setShowToast] = useState(false); // Estado para la notificación
 
   useEffect(() => {
-    if (isOpen) {
-      setFechaRegistro(fechaInicial);
-      fetchDatos();
-    }
-  }, [isOpen, tipo, fechaRegistro]);
+  if (isOpen) {
+    // Solo forzamos la fecha inicial si el estado interno está vacío o el modal recién se abre
+    fetchDatos();
+  }
+}, [isOpen, tipo, fechaRegistro]); // Esto está bien para cargar datos, pero asegúrate de que el input cambie el estado.
 
   const fetchDatos = async () => {
     try {
