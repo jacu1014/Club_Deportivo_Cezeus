@@ -13,12 +13,18 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      // Sincronizamos con la fecha que viene del Dashboard al abrir
-      setFechaRegistro(fechaInicial);
-      fetchDatos();
-    }
-  }, [isOpen, tipo, fechaRegistro]);
+  if (isOpen) {
+    // Solo forzamos la fecha del Dashboard la PRIMERA VEZ que se abre
+    setFechaRegistro(fechaInicial);
+  }
+}, [isOpen]); // Quitamos las otras dependencias para que no se resetee al cambiar la fecha
+
+useEffect(() => {
+  if (isOpen) {
+    // Cada vez que cambie la fechaRegistro (manualmente), traemos los datos de ese día
+    fetchDatos();
+  }
+}, [isOpen, tipo, fechaRegistro]);
 
   const fetchDatos = async () => {
     try {
@@ -158,10 +164,11 @@ const ModalAsistencia = ({ isOpen, onClose, tipo, fechaInicial, onSaveSuccess })
               </select>
             )}
             <input 
-              type="date" 
-              value={fechaRegistro}
-              onChange={(e) => setFechaRegistro(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-[11px] font-black text-white focus:outline-none focus:border-white/30"
+            type="date" 
+            value={fechaRegistro}
+            max={new Date().toISOString().split("T")[0]} // Evita fechas futuras
+            onChange={(e) => setFechaRegistro(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-[11px] font-black text-white focus:outline-none focus:border-white/30 cursor-pointer"
             />
             <div className="relative md:col-span-1">
               <input 
