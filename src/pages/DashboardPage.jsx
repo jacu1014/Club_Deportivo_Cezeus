@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import ModalAsistencia from '../components/ModalAsistencia';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { es } from 'es-variant'; // Asegúrate de tener date-fns/locale si prefieres
 import { generarReporteAsistencia } from '../services/reporteAsistencia'; 
 
 const DashboardPage = ({ user }) => {
