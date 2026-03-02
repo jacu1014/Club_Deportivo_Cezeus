@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import ModalAsistencia from '../components/ModalAsistencia';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import es from 'date-fns/locale/es'; // Importación estable para Vercel
 import { generarReporteAsistencia } from '../services/reporteAsistencia'; 
 import AttendanceChart from '../components/AttendanceChart';
 
@@ -13,7 +14,6 @@ const DashboardPage = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
   
-  // 1. Rango de fechas para la visualización del Dashboard
   const [rangoDashboard, setRangoDashboard] = useState({
     inicio: format(new Date(), 'yyyy-MM-dd'),
     fin: format(new Date(), 'yyyy-MM-dd')
@@ -26,7 +26,6 @@ const DashboardPage = ({ user }) => {
     fetchCategorias();
   }, [rangoDashboard, currentRole]);
 
-  // OBTENER CATEGORÍAS
   const fetchCategorias = async () => {
     try {
       const { data, error } = await supabase
@@ -42,7 +41,6 @@ const DashboardPage = ({ user }) => {
     }
   };
 
-  // FETCH DATOS CON RANGO DINÁMICO
   const fetchDatos = async () => {
     setLoading(true);
     try {
@@ -53,7 +51,6 @@ const DashboardPage = ({ user }) => {
         const finMes = endOfMonth(new Date()).toISOString().split('T')[0];
         query = query.eq('usuario_id', user.id).gte('fecha', inicioMes).lte('fecha', finMes);
       } else {
-        // Filtro global del Dashboard por rango seleccionado
         query = query.gte('fecha', rangoDashboard.inicio).lte('fecha', rangoDashboard.fin);
       }
 
@@ -67,7 +64,6 @@ const DashboardPage = ({ user }) => {
     }
   };
 
-  // MANEJO DE PDF (Sin cambios en lógica, solo integración)
   const handleExportarPDF = async () => {
     const fInicio = document.getElementById('fecha_inicio').value;
     const fFin = document.getElementById('fecha_fin').value;
@@ -119,7 +115,7 @@ const DashboardPage = ({ user }) => {
     <div className="min-h-screen bg-[#05080d] text-slate-200 p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto space-y-8 md:space-y-12">
         
-        {/* HEADER RESPONSIVE */}
+        {/* HEADER */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-white/5 pb-8">
           <div className="space-y-2">
             <h2 className="text-white font-black text-3xl md:text-5xl uppercase italic tracking-tighter leading-none">
@@ -151,126 +147,118 @@ const DashboardPage = ({ user }) => {
           </button>
         </div>
 
-        {/* CONTENIDO PRINCIPAL - GRID DINÁMICO REESTRUCTURADO */}
-{['SUPER_ADMIN', 'DIRECTOR', 'ADMINISTRATIVO'].includes(currentRole) ? (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    
-    {/* CARD 1: ALUMNOS */}
-    <DashboardCard 
-      title="Alumnos" 
-      count={stats.alumnosPres} 
-      label="En Rango" 
-      icon="groups" 
-      color="text-cyan-400" 
-      btnText="Pasar/Editar" 
-      onBtnClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} 
-    />
+        {/* CONTENIDO PRINCIPAL */}
+        {['SUPER_ADMIN', 'DIRECTOR', 'ADMINISTRATIVO'].includes(currentRole) ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            <DashboardCard 
+              title="Alumnos" 
+              count={stats.alumnosPres} 
+              label="En Rango" 
+              icon="groups" 
+              color="text-cyan-400" 
+              btnText="Pasar/Editar" 
+              onBtnClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} 
+            />
 
-    {/* CARD 2: STAFF */}
-    <DashboardCard 
-      title="Staff" 
-      count={stats.staffPres} 
-      label="En Rango" 
-      icon="badge" 
-      color="text-emerald-400" 
-      btnText="Gestionar" 
-      onBtnClick={() => { setTipoSeleccionado('STAFF'); setIsModalOpen(true); }} 
-    />
+            <DashboardCard 
+              title="Staff" 
+              count={stats.staffPres} 
+              label="En Rango" 
+              icon="badge" 
+              color="text-emerald-400" 
+              btnText="Gestionar" 
+              onBtnClick={() => { setTipoSeleccionado('STAFF'); setIsModalOpen(true); }} 
+            />
 
-    {/* CARD 3: SECCIÓN EXPORTAR */}
-    <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between min-h-[320px]">
-      <div>
-        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Exportar Reporte PDF</p>
-        <div className="space-y-3">
-          <select id="filtro_rol_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
-            <option value="ALUMNO">ALUMNOS</option>
-            <option value="STAFF">TODO EL STAFF</option>
-          </select>
-          <select id="filtro_categoria_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
-            <option value="TODAS">CATEGORÍAS</option>
-            {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.inicio}/>
-            <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.fin}/>
+            <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between min-h-[320px]">
+              <div>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Exportar Reporte PDF</p>
+                <div className="space-y-3">
+                  <select id="filtro_rol_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
+                    <option value="ALUMNO">ALUMNOS</option>
+                    <option value="STAFF">TODO EL STAFF</option>
+                  </select>
+                  <select id="filtro_categoria_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
+                    <option value="TODAS">CATEGORÍAS</option>
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.inicio}/>
+                    <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.fin}/>
+                  </div>
+                </div>
+              </div>
+              <button onClick={handleExportarPDF} disabled={exportLoading} className="w-full mt-6 bg-emerald-500 text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all">
+                {exportLoading ? 'Procesando...' : 'Generar PDF'}
+              </button>
+            </div>
+
+            {/* SECCIÓN INFERIOR DISTRIBUIDA CORRECTAMENTE */}
+            <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3 bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between">
+                <div>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 italic">Análisis Dinámico</p>
+                  <h4 className="text-white text-2xl font-black uppercase italic tracking-tighter leading-none">
+                    Tendencia de <span className="text-cyan-400">Asistencia</span>
+                  </h4>
+                </div>
+                <AttendanceChart asistencias={asistencias} />
+              </div>
+
+              <div className="lg:col-span-1">
+                <RecentActivity asistencias={asistencias} />
+              </div>
+            </div>
+            
           </div>
-        </div>
-      </div>
-      <button onClick={handleExportarPDF} disabled={exportLoading} className="w-full mt-6 bg-emerald-500 text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all">
-        {exportLoading ? 'Procesando...' : 'Generar PDF'}
-      </button>
-    </div>
-
-    {/* SECCIÓN INFERIOR DISTRIBUIDA */}
-<div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-4 gap-6">
-  
-  {/* GRÁFICA: Ocupa 3 columnas de las 4 disponibles en escritorio */}
-  <div className="lg:col-span-3 bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between">
-    <div>
-      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2 italic">Análisis Dinámico</p>
-      <h4 className="text-white text-2xl font-black uppercase italic tracking-tighter leading-none">
-        Tendencia de <span className="text-cyan-400">Asistencia</span>
-      </h4>
-    </div>
-    
-    {/* Este es el nuevo componente que importamos arriba */}
-    <AttendanceChart asistencias={asistencias} />
-  </div>
-
-  {/* ACTIVIDAD RECIENTE: Ocupa la última columna */}
-  <div className="lg:col-span-1">
-    <RecentActivity asistencias={asistencias} />
-  </div>
-  
-</div>
-    
-  </div>
-) : (
-  /* VISTA ENTRENADOR / ALUMNO - SE MANTIENE IGUAL */
-  <div className="space-y-8">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {currentRole === 'ENTRENADOR' && (
-        <button onClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} className="h-48 bg-gradient-to-br from-cyan-400 to-blue-600 text-black rounded-[2.5rem] font-black uppercase italic text-2xl flex flex-col items-center justify-center gap-3 hover:scale-[1.01] transition-all shadow-2xl shadow-cyan-500/20">
-          <span className="material-symbols-outlined text-6xl">inventory</span>
-          Pasar Asistencia Hoy
-        </button>
-      )}
-      <div className="bg-[#0a0f18]/60 border border-white/5 p-10 rounded-[2.5rem] flex flex-col justify-center">
-        <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 italic">Asistencias del Mes</p>
-        <h3 className="text-7xl font-black text-white">{stats.misAsistencias} <span className="text-xl text-slate-500 uppercase">Días</span></h3>
-      </div>
-    </div>
-    
-    <div className="bg-[#0a0f18]/60 border border-white/5 rounded-[2.5rem] overflow-hidden">
-      <div className="p-6 bg-white/[0.02] border-b border-white/5">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Historial Reciente</p>
-      </div>
-      <div className="p-6 md:p-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {asistencias.map(a => (
-          <div key={a.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-1 hover:bg-white/10 transition-all">
-            <span className="text-[9px] font-bold text-slate-500 uppercase">{format(new Date(a.fecha), "dd MMM")}</span>
-            <span className={`text-[10px] font-black uppercase italic ${a.estado === 'PRESENTE' ? 'text-emerald-400' : 'text-rose-500'}`}>
-              {a.estado === 'PRESENTE' ? '✓ Presente' : 'X Ausente'}
-            </span>
+        ) : (
+          /* VISTA ENTRENADOR / ALUMNO */
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {currentRole === 'ENTRENADOR' && (
+                <button onClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} className="h-48 bg-gradient-to-br from-cyan-400 to-blue-600 text-black rounded-[2.5rem] font-black uppercase italic text-2xl flex flex-col items-center justify-center gap-3 hover:scale-[1.01] transition-all shadow-2xl shadow-cyan-500/20">
+                  <span className="material-symbols-outlined text-6xl">inventory</span>
+                  Pasar Asistencia Hoy
+                </button>
+              )}
+              <div className="bg-[#0a0f18]/60 border border-white/5 p-10 rounded-[2.5rem] flex flex-col justify-center">
+                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 italic">Asistencias del Mes</p>
+                <h3 className="text-7xl font-black text-white">{stats.misAsistencias} <span className="text-xl text-slate-500 uppercase">Días</span></h3>
+              </div>
+            </div>
+            
+            <div className="bg-[#0a0f18]/60 border border-white/5 rounded-[2.5rem] overflow-hidden">
+              <div className="p-6 bg-white/[0.02] border-b border-white/5">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Historial Reciente</p>
+              </div>
+              <div className="p-6 md:p-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {asistencias.map(a => (
+                  <div key={a.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-1 hover:bg-white/10 transition-all">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">{format(parseISO(a.fecha), "dd MMM", { locale: es })}</span>
+                    <span className={`text-[10px] font-black uppercase italic ${a.estado === 'PRESENTE' ? 'text-emerald-400' : 'text-rose-500'}`}>
+                      {a.estado === 'PRESENTE' ? '✓ Presente' : 'X Ausente'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
-      <ModalAsistencia 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        tipo={tipoSeleccionado}
-        fechaInicial={rangoDashboard.inicio} 
-        onSaveSuccess={fetchDatos} 
-      />
+        <ModalAsistencia 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          tipo={tipoSeleccionado}
+          fechaInicial={rangoDashboard.inicio} 
+          onSaveSuccess={fetchDatos} 
+        />
+      </div>
     </div>
   );
 };
 
-/* --- COMPONENTES AUXILIARES CON REFACTOR --- */
+/* --- COMPONENTES AUXILIARES --- */
 
 const DashboardCard = ({ title, count, label, icon, color, btnText, onBtnClick }) => (
   <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl relative group overflow-hidden flex flex-col justify-between min-h-[320px]">
