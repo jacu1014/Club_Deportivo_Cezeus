@@ -120,6 +120,7 @@ const NotificacionesPage = () => {
                 <option value="ALUMNO">ALUMNOS</option>
                 <option value="ENTRENADOR">ENTRENADORES</option>
                 <option value="ADMINISTRATIVO">ADMINISTRATIVOS</option>
+                <option value="DIRECTOR">DIRECTORES</option>
               </select>
             </div>
             <div className="flex-[2]">
