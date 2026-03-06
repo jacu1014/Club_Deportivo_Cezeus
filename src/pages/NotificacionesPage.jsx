@@ -24,32 +24,37 @@ const NotificacionesPage = () => {
     setUsuarios(data || []);
   };
 
-  // --- LÓGICA DE REEMPLAZO DINÁMICO ---
+  // --- LÓGICA DE ENVÍO Y REEMPLAZO DINÁMICO ---
   const enviarWA = (u) => {
     if (!mensajeActual) return mostrarNotif("Selecciona un mensaje de la biblioteca", "error");
     
-    // Priorizamos el teléfono del acudiente, si no, el del alumno
-    const tel = u.acudiente_telefono || u.telefono;
-    if (!tel) return mostrarNotif("Este usuario no tiene teléfono registrado", "error");
-    
-    let msgFinal = mensajeActual;
+    // 1. Priorizar el teléfono del acudiente, si no, el del alumno
+    const telRaw = u.acudiente_telefono || u.telefono;
+    if (!telRaw) return mostrarNotif("Este usuario no tiene teléfono registrado", "error");
 
-    /**
-     * Recorremos todas las llaves del objeto usuario (u).
-     * Si el mensaje contiene [nombre_columna], lo reemplaza por el valor real.
-     */
+    // 2. NORMALIZACIÓN DEL TELÉFONO (+57)
+    // Quitamos cualquier carácter que no sea número
+    let telLimpio = telRaw.replace(/\D/g, '');
+
+    // Si el número no empieza por 57 (Colombia), se lo agregamos
+    if (!telLimpio.startsWith('57')) {
+      telLimpio = `57${telLimpio}`;
+    }
+    
+    // 3. REEMPLAZO DINÁMICO DE ETIQUETAS
+    let msgFinal = mensajeActual;
     Object.keys(u).forEach((key) => {
       const valor = u[key] !== null && u[key] !== undefined ? String(u[key]) : "";
-      // Usamos una RegExp global para reemplazar todas las ocurrencias de la etiqueta
+      // Reemplazo global de la etiqueta [nombre_columna]
       const regex = new RegExp(`\\[${key}\\]`, 'g');
       msgFinal = msgFinal.replace(regex, valor);
     });
 
-    // Abrir WhatsApp con el mensaje procesado
-    const url = `https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(msgFinal)}`;
+    // 4. ABRIR WHATSAPP
+    const url = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msgFinal.trim())}`;
     window.open(url, '_blank');
 
-    // Marcamos visualmente como enviado usando el documento o ID
+    // Marcar como enviado
     setEnviados(prev => new Set(prev).add(u.numero_documento || u.id));
   };
 
@@ -87,14 +92,14 @@ const NotificacionesPage = () => {
         <div className="flex gap-3">
           {enviados.size > 0 && (
             <button onClick={limpiarMarcas} className="px-5 py-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">
-              Limpiar Progreso ({enviados.size})
+              Limpiar ({enviados.size})
             </button>
           )}
           <div className={`px-6 py-3 rounded-2xl border transition-all duration-500 flex items-center gap-3 ${
             mensajeActual ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-600'
           }`}>
             <span className="material-symbols-outlined text-sm">{mensajeActual ? 'verified' : 'hourglass_empty'}</span>
-            <span className="text-[9px] font-black uppercase tracking-widest">{mensajeActual ? 'Listo para enviar' : 'Carga un mensaje'}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">{mensajeActual ? 'Listo' : 'Carga mensaje'}</span>
           </div>
         </div>
       </div>
