@@ -55,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: PaginasApp.EVALUACION, label: 'EVALUACIÓN', icon: 'analytics', path: '/evaluacion' },
     { id: PaginasApp.PAGOS, label: 'PAGOS', icon: 'account_balance_wallet', path: '/pagos' },
     { id: PaginasApp.CALENDARIO, label: 'CALENDARIO', icon: 'calendar_today', path: '/calendario' },
-    { id: PaginasApp.NOTIFICACIONES, label: 'NOTIFICACIONES', icon: 'forum', path: '/notificaciones' },
+    { id: PaginasApp.NOTIFICACIONES, label: 'NOTIFICACIONES', icon: 'notifications_active', path: '/notificaciones' },
     { id: PaginasApp.NOSOTROS, label: 'NOSOTROS', icon: 'shield', path: '/nosotros' },
     { id: PaginasApp.CONFIGURACION, label: 'CONFIGURACIÓN', icon: 'settings', path: '/configuracion' },
   ];

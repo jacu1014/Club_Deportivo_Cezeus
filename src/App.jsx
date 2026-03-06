@@ -15,6 +15,7 @@ import PagosModule from './pages/PagosModule';
 import CalendarioPage from './pages/CalendarioPage';
 import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
+import NotificacionesPage from './pages/NotificacionesPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -107,6 +108,18 @@ function App() {
                   <DashboardPage user={user} />
                 </MainLayout>
               ) : <Navigate to="/login" />
+            } 
+          />
+
+          {/* --- NUEVA RUTA: NOTIFICACIONES --- */}
+          <Route 
+            path="/notificaciones" 
+            element={
+              user && canAccess(PaginasApp.NOTIFICACIONES) ? (
+                <MainLayout user={user}>
+                  <NotificacionesPage user={user} />
+                </MainLayout>
+              ) : <Navigate to={user ? "/dashboard" : "/login"} />
             } 
           />
 
