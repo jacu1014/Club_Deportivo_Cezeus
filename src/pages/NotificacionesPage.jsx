@@ -9,7 +9,7 @@ const NotificacionesPage = () => {
   const [mensajeActual, setMensajeActual] = useState('');
   const [notif, setNotif] = useState(null);
   
-  // Estado para el marcado de enviados (Usamos Documento o ID como llave única)
+  // Estado para el marcado de enviados
   const [enviados, setEnviados] = useState(new Set());
 
   const mostrarNotif = (texto, tipo) => {
@@ -24,15 +24,32 @@ const NotificacionesPage = () => {
     setUsuarios(data || []);
   };
 
+  // --- LÓGICA DE REEMPLAZO DINÁMICO ---
   const enviarWA = (u) => {
     if (!mensajeActual) return mostrarNotif("Selecciona un mensaje de la biblioteca", "error");
+    
+    // Priorizamos el teléfono del acudiente, si no, el del alumno
     const tel = u.acudiente_telefono || u.telefono;
     if (!tel) return mostrarNotif("Este usuario no tiene teléfono registrado", "error");
     
-    const msgFinal = mensajeActual.replace("[NOMBRE]", u.primer_nombre);
-    window.open(`https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(msgFinal)}`, '_blank');
+    let msgFinal = mensajeActual;
 
-    // Marcamos visualmente como enviado
+    /**
+     * Recorremos todas las llaves del objeto usuario (u).
+     * Si el mensaje contiene [nombre_columna], lo reemplaza por el valor real.
+     */
+    Object.keys(u).forEach((key) => {
+      const valor = u[key] !== null && u[key] !== undefined ? String(u[key]) : "";
+      // Usamos una RegExp global para reemplazar todas las ocurrencias de la etiqueta
+      const regex = new RegExp(`\\[${key}\\]`, 'g');
+      msgFinal = msgFinal.replace(regex, valor);
+    });
+
+    // Abrir WhatsApp con el mensaje procesado
+    const url = `https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(msgFinal)}`;
+    window.open(url, '_blank');
+
+    // Marcamos visualmente como enviado usando el documento o ID
     setEnviados(prev => new Set(prev).add(u.numero_documento || u.id));
   };
 
