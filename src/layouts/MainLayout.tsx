@@ -16,32 +16,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [cumpleaniosHoy, setCumpleaniosHoy] = useState<{ nombre: string; esElMismo: boolean }[]>([]);
   
-  // Estados de visibilidad
   const [showBirthdayNotif, setShowBirthdayNotif] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
   useEffect(() => {
-    // Verificamos que el usuario y su ID existan antes de proceder
     if (user?.id) {
       const yaMostradoCumple = sessionStorage.getItem(`cumple_mostrado_${user.id}`);
       const yaMostradoRol = sessionStorage.getItem(`rol_mostrado_${user.id}`);
 
-      // Solo verificamos cumpleaños si no se ha hecho en esta sesión
       if (!yaMostradoCumple) {
         checkBirthdays();
       }
 
-      // Solo mostramos el modal de rol si no se ha mostrado
       if (!yaMostradoRol && ROLE_ANNOUNCEMENTS[user.rol]?.show) {
         setShowRoleModal(true);
       }
     }
-  }, [user?.id, user?.rol]); // Dependencias más precisas
+  }, [user?.id, user?.rol]);
 
   const checkBirthdays = async () => {
     try {
       const hoy = new Date();
-      // Formato MM-DD
       const mesDiaHoy = `${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`; 
 
       const { data, error } = await supabase
@@ -58,17 +53,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
           esElMismo: String(u.id) === String(user.id) 
         }));
 
-      // DEBUG: Borra esta línea una vez funcione
-      console.log("Sistema de Cumpleaños - Hoy es:", mesDiaHoy, "Encontrados:", cumplenHoy.length);
-
       if (cumplenHoy.length > 0) {
         setCumpleaniosHoy(cumplenHoy);
         setShowBirthdayNotif(true);
-        
-        // Marcamos como mostrado
         sessionStorage.setItem(`cumple_mostrado_${user.id}`, 'true');
         
-        // Lanzamos confeti si el usuario actual es uno de los cumpleañeros
         if (cumplenHoy.some(c => c.esElMismo)) {
           triggerConfetti();
         }
@@ -157,7 +146,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
           </div>
         )}
 
-        {/* SIDEBAR ACTUALIZADO CON LA PROP DE CUMPLEAÑOS */}
         <Sidebar 
           user={user} 
           isDarkMode={isDarkMode} 
@@ -168,9 +156,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
         />
 
         <main className="flex-1 lg:ml-64 p-4 lg:p-8">
-          <button className="lg:hidden mb-4 p-2 text-slate-600 dark:text-slate-400" onClick={() => setIsOpen(true)}>
-            <span className="material-symbols-outlined">menu</span>
-          </button>
+          {/* BOTÓN DE MENÚ ACTUALIZADO (STICKY PARA MÓVIL) */}
+          <div className="lg:hidden sticky top-0 z-[50] -mx-4 -mt-4 mb-4 p-4 bg-slate-50/80 dark:bg-[#05080d]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+            <button 
+              className="flex items-center gap-3 p-2 text-slate-600 dark:text-cyan-400 font-black uppercase italic text-xs tracking-widest" 
+              onClick={() => setIsOpen(true)}
+            >
+              <span className="material-symbols-outlined">menu</span>
+              <span>Menú</span>
+            </button>
+          </div>
+          
           {children}
         </main>
       </div>
