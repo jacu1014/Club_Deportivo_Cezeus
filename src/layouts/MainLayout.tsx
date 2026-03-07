@@ -88,7 +88,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-      <div className="flex min-h-screen bg-slate-50 dark:bg-[#05080d] relative">
+      {/* Contenedor principal: Altura fija de pantalla para evitar el scroll del body */}
+      <div className="flex h-screen bg-slate-50 dark:bg-[#05080d] overflow-hidden relative">
         
         {/* MODAL DE ROL CENTRADO */}
         {showRoleModal && roleInfo && (
@@ -156,9 +157,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
           isBirthday={esMiCumple} 
         />
 
-        <main className="flex-1 lg:ml-64 p-4 lg:p-8">
-          {/* BARRA SUPERIOR STICKY PARA MÓVILES */}
-          <div className="lg:hidden sticky top-0 z-[40] -mx-4 -mt-4 mb-4 p-4 bg-slate-50/80 dark:bg-[#05080d]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center">
+        {/* CONTENEDOR DE CONTENIDO: Ocupa el resto de la pantalla y maneja su propio scroll */}
+        <div className="flex-1 flex flex-col min-w-0 lg:ml-64 h-full">
+          
+          {/* BARRA SUPERIOR FIJA EN MÓVILES */}
+          <header className="lg:hidden flex items-center h-16 px-4 bg-slate-50/90 dark:bg-[#05080d]/90 backdrop-blur-md border-b border-slate-200 dark:border-white/5 z-30">
             <button 
               className="p-2 text-slate-600 dark:text-cyan-400 flex items-center gap-2" 
               onClick={() => setIsOpen(true)}
@@ -166,10 +169,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
               <span className="material-symbols-outlined">menu</span>
               <span className="text-[10px] font-black uppercase tracking-widest italic">Menú</span>
             </button>
-          </div>
+          </header>
 
-          {children}
-        </main>
+          {/* ÁREA DE SCROLL INDEPENDIENTE */}
+          <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

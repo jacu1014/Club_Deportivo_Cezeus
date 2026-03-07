@@ -88,20 +88,24 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
+      {/* OVERLAY PARA MÓVILES */}
       <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
         onClick={onClose} 
       />
 
-      <aside className={`w-72 lg:w-64 bg-[#0a1118] border-r border-white/5 fixed h-full z-50 flex flex-col transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      {/* ASIDE PRINCIPAL */}
+      <aside className={`w-72 lg:w-64 bg-[#0a1118] border-r border-white/5 fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         
-        <div className="p-8 flex flex-col items-center">
+        {/* CABECERA: LOGO */}
+        <div className="p-8 flex flex-col items-center shrink-0">
           <img src={LogoImg} alt="Logo" className="w-16 h-16 rounded-xl mb-4 border border-white/10 shadow-2xl" />
           <h2 className="text-[10px] tracking-[0.3em] text-white/40 uppercase font-bold">Club Deportivo</h2>
           <h1 className="text-xl font-black text-white tracking-tighter italic">CE<span className="text-primary">ZEUS</span></h1>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto pt-4 custom-scrollbar">
+        {/* NAVEGACIÓN CON SCROLL INTERNO */}
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar py-4">
           {filteredMenu.map((item) => (
             <NavLink
               key={item.id}
@@ -125,7 +129,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           ))}
         </nav>
 
-        <div className="p-4 border-t border-white/5 space-y-3 bg-black/20">
+        {/* FOOTER: AJUSTES Y PERFIL */}
+        <div className="p-4 border-t border-white/5 space-y-3 bg-black/20 shrink-0">
           <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all group border border-transparent hover:border-white/10">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-slate-500 group-hover:text-primary transition-colors">
@@ -138,7 +143,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </button>
 
-          {/* User Profile Card con Estilos de Cumpleaños */}
+          {/* User Profile Card */}
           <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all duration-500 ${
             isBirthday 
               ? 'bg-gradient-to-r from-amber-400/20 to-yellow-600/20 border-yellow-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] animate-pulse' 
