@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
+// NUEVO: Importación para Analítica de Vercel
 import { Analytics } from '@vercel/analytics/react';
 
 // Layouts y Páginas
@@ -20,32 +21,30 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función para obtener perfil de la DB sin repetir código
-  const fetchUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error("Error al obtener perfil de usuario:", err);
-      return null;
-    }
-  };
-
   useEffect(() => {
-    let isMounted = true;
+    // Mantengo tu timeout de seguridad: si algo falla, la app inicia igual a los 5s
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("La carga inicial tardó demasiado. Forzando inicio...");
+        setLoading(false);
+      }
+    }, 5000);
 
     const initApp = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
         
-        if (session?.user && isMounted) {
-          const dbUser = await fetchUserProfile(session.user.id);
+        if (authError) throw authError;
+
+        if (session?.user) {
+          const { data: dbUser, error: dbError } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (dbError) console.error("Error consultando tabla usuarios:", dbError);
+
           setUser(dbUser || { 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
@@ -54,29 +53,32 @@ function App() {
           });
         }
       } catch (error) {
-        console.error("Error en inicialización:", error);
+        console.error("Error crítico en initApp:", error.message);
       } finally {
-        if (isMounted) setLoading(false);
+        setLoading(false);
+        clearTimeout(timeout);
       }
     };
 
     initApp();
 
-    // Listener de cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        const dbUser = await fetchUserProfile(session.user.id);
-        if (isMounted) setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+        supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
+          .then(({ data }) => {
+            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+            // IMPORTANTE: Aseguramos que si el login ocurre tras un refresh, quite el loading
+            setLoading(false); 
+          });
       } else {
-        if (isMounted) setUser(null);
+        setUser(null);
+        setLoading(false);
       }
-      // Aseguramos que el loading se apague tras cualquier cambio de estado
-      if (isMounted) setLoading(false);
     });
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
+      clearTimeout(timeout);
     };
   }, []);
 
@@ -98,10 +100,10 @@ function App() {
     <>
       <Router>
         <Routes>
+          {/* Añadido 'replace' para evitar que el usuario vuelva al login con el botón de atrás */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* DASHBOARD */}
           <Route 
             path="/dashboard" 
             element={
@@ -113,7 +115,6 @@ function App() {
             } 
           />
 
-          {/* NOTIFICACIONES */}
           <Route 
             path="/notificaciones" 
             element={
@@ -125,7 +126,6 @@ function App() {
             } 
           />
 
-          {/* NOSOTROS */}
           <Route 
             path="/nosotros" 
             element={
@@ -137,7 +137,6 @@ function App() {
             } 
           />
           
-          {/* ALUMNOS */}
           <Route 
             path="/alumnos" 
             element={
@@ -149,7 +148,6 @@ function App() {
             } 
           />
 
-          {/* CALENDARIO */}
           <Route 
             path="/calendario" 
             element={
@@ -161,7 +159,6 @@ function App() {
             } 
           />
 
-          {/* CONFIGURACIÓN */}
           <Route 
             path="/configuracion" 
             element={
@@ -173,7 +170,6 @@ function App() {
             } 
           />
 
-          {/* PAGOS */}
           <Route 
             path="/pagos" 
             element={
@@ -185,9 +181,9 @@ function App() {
             } 
           />
 
-          {/* REDIRECCIONES POR DEFECTO */}
-          <Route path="/" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} replace />} />
+          {/* Redirecciones mejoradas para recarga */}
+          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+          <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </Router>
       <Analytics />
