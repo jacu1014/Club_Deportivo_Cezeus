@@ -55,7 +55,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   useEffect(() => { fetchPlantillas(); }, []);
 
   const fetchPlantillas = async () => {
-    const { data } = await supabase.from('plantillas_messages').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('plantillas_mensajes').select('*').order('created_at', { ascending: false });
     setPlantillas(data || []);
   };
 
@@ -74,8 +74,8 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
     if (!titulo || !cuerpo) return mostrarNotif("Completa los campos", "error");
     const payload = { titulo: titulo.toUpperCase(), cuerpo };
     const { error } = idEditando 
-      ? await supabase.from('plantillas_messages').update(payload).eq('id', idEditando)
-      : await supabase.from('plantillas_messages').insert([payload]);
+      ? await supabase.from('plantillas_mensajes').update(payload).eq('id', idEditando)
+      : await supabase.from('plantillas_mensajes').insert([payload]);
 
     if (!error) {
       mostrarNotif("Guardado con éxito", "success");
@@ -87,7 +87,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   const eliminar = async (id, e) => {
     e.stopPropagation();
     if(!window.confirm("¿Eliminar esta plantilla?")) return;
-    const { error } = await supabase.from('plantillas_messages').delete().eq('id', id);
+    const { error } = await supabase.from('plantillas_mensajes').delete().eq('id', id);
     if(!error) {
         mostrarNotif("Eliminado", "success");
         fetchPlantillas();
