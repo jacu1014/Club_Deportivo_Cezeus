@@ -16,6 +16,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [cumpleaniosHoy, setCumpleaniosHoy] = useState<{ nombre: string; esElMismo: boolean }[]>([]);
   
+  // Estados de visibilidad
   const [showBirthdayNotif, setShowBirthdayNotif] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
@@ -156,17 +157,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, children }) => {
         />
 
         <main className="flex-1 lg:ml-64 p-4 lg:p-8">
-          {/* BOTÓN DE MENÚ ACTUALIZADO (STICKY PARA MÓVIL) */}
-          <div className="lg:hidden sticky top-0 z-[50] -mx-4 -mt-4 mb-4 p-4 bg-slate-50/80 dark:bg-[#05080d]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+          {/* BARRA SUPERIOR STICKY PARA MÓVILES */}
+          <div className="lg:hidden sticky top-0 z-[40] -mx-4 -mt-4 mb-4 p-4 bg-slate-50/80 dark:bg-[#05080d]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center">
             <button 
-              className="flex items-center gap-3 p-2 text-slate-600 dark:text-cyan-400 font-black uppercase italic text-xs tracking-widest" 
+              className="p-2 text-slate-600 dark:text-cyan-400 flex items-center gap-2" 
               onClick={() => setIsOpen(true)}
             >
               <span className="material-symbols-outlined">menu</span>
-              <span>Menú</span>
+              <span className="text-[10px] font-black uppercase tracking-widest italic">Menú</span>
             </button>
           </div>
-          
+
           {children}
         </main>
       </div>

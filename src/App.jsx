@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
-// NUEVO: Importación para Analítica de Vercel
 import { Analytics } from '@vercel/analytics/react';
 
 // Layouts y Páginas
@@ -21,8 +20,25 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Función reutilizable para obtener datos del usuario desde la DB
+  const fetchUserData = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error("Error al obtener datos del usuario:", err);
+      return null;
+    }
+  };
+
   useEffect(() => {
-    // Mantengo tu timeout: si algo falla con la red, la app arranca a los 5s
+    // Timeout de seguridad para evitar pantalla de carga infinita
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn("La carga inicial tardó demasiado. Forzando inicio...");
@@ -32,19 +48,10 @@ function App() {
 
     const initApp = async () => {
       try {
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (authError) throw authError;
-
         if (session?.user) {
-          const { data: dbUser, error: dbError } = await supabase
-            .from('usuarios')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (dbError) console.error("Error consultando tabla usuarios:", dbError);
-
+          const dbUser = await fetchUserData(session.user.id);
           setUser(dbUser || { 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
@@ -62,17 +69,15 @@ function App() {
 
     initApp();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    // Listener de cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
-          .then(({ data }) => {
-            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
-            setLoading(false); // Apaga el loading tras recuperar el perfil
-          });
+        const dbUser = await fetchUserData(session.user.id);
+        setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
       } else {
         setUser(null);
-        setLoading(false);
       }
+      setLoading(false); // Asegura que el loading se apague tras cambios de auth
     });
 
     return () => {
@@ -95,95 +100,52 @@ function App() {
     );
   }
 
+  // Definimos la ruta de inicio por defecto según tu lógica original
+  const getHomeRoute = () => {
+    if (!user) return "/login";
+    return user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+  };
+
   return (
     <>
       <Router>
         <Routes>
-          {/* Al entrar al login, si ya hay sesión, mandamos a /alumnos */}
+          {/* Login redirige a alumnos si ya hay usuario */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* RUTA PRINCIPAL: ALUMNOS */}
-          <Route 
-            path="/alumnos" 
-            element={
-              user && canAccess(PaginasApp.ALUMNOS) ? (
-                <MainLayout user={user}>
-                  <Alumnos />
-                </MainLayout>
-              ) : <Navigate to="/login" replace />
-            } 
-          />
+          {/* Rutas Protegidas */}
+          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? (
+            <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
+          ) : <Navigate to="/login" replace />} />
 
-          <Route 
-            path="/dashboard" 
-            element={
-              user && canAccess(PaginasApp.DASHBOARD) ? (
-                <MainLayout user={user}>
-                  <DashboardPage user={user} />
-                </MainLayout>
-              ) : <Navigate to="/alumnos" replace />
-            } 
-          />
+          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? (
+            <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout>
+          ) : <Navigate to={user ? "/dashboard" : "/login"} replace />} />
 
-          <Route 
-            path="/notificaciones" 
-            element={
-              user && canAccess(PaginasApp.NOTIFICACIONES) ? (
-                <MainLayout user={user}>
-                  <NotificacionesPage user={user} />
-                </MainLayout>
-              ) : <Navigate to="/alumnos" replace />
-            } 
-          />
+          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? (
+            <MainLayout user={user}><Nosotros /></MainLayout>
+          ) : <Navigate to="/login" replace />} />
+          
+          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? (
+            <MainLayout user={user}><Alumnos /></MainLayout>
+          ) : <Navigate to={user ? "/calendario" : "/login"} replace />} />
 
-          <Route 
-            path="/nosotros" 
-            element={
-              user && canAccess(PaginasApp.NOSOTROS) ? (
-                <MainLayout user={user}>
-                  <Nosotros />
-                </MainLayout>
-              ) : <Navigate to="/login" replace />
-            } 
-          />
+          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? (
+            <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout>
+          ) : <Navigate to="/login" replace />} />
 
-          <Route 
-            path="/calendario" 
-            element={
-              user && canAccess(PaginasApp.CALENDARIO) ? (
-                <MainLayout user={user}>
-                  <CalendarioPage userRol={user.rol} />
-                </MainLayout>
-              ) : <Navigate to="/login" replace />
-            } 
-          />
+          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? (
+            <MainLayout user={user}><Configuracion user={user} /></MainLayout>
+          ) : <Navigate to="/login" replace />} />
 
-          <Route 
-            path="/configuracion" 
-            element={
-              user && canAccess(PaginasApp.CONFIGURACION) ? (
-                <MainLayout user={user}>
-                  <Configuracion user={user} />
-                </MainLayout>
-              ) : <Navigate to="/login" replace />
-            } 
-          />
+          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? (
+            <MainLayout user={user}><PagosModule user={user} /></MainLayout>
+          ) : <Navigate to="/login" replace />} />
 
-          <Route 
-            path="/pagos" 
-            element={
-              user && canAccess(PaginasApp.PAGOS) ? (
-                <MainLayout user={user}>
-                  <PagosModule user={user} /> 
-                </MainLayout>
-              ) : <Navigate to="/login" replace />
-            } 
-          />
-
-          {/* Redirecciones automáticas a Alumnos */}
-          <Route path="/" element={<Navigate to={user ? "/alumnos" : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? "/alumnos" : "/login"} replace />} />
+          {/* Redirecciones Finales */}
+          <Route path="/" element={<Navigate to={getHomeRoute()} replace />} />
+          <Route path="*" element={<Navigate to={getHomeRoute()} replace />} />
         </Routes>
       </Router>
       <Analytics />
