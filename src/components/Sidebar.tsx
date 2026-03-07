@@ -50,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       DEFINICIÓN DEL MENÚ
   ======================= */
   const menuItems = [
-    { id: PaginasApp.DASHBOARD, label: 'DASHBOARD', icon: 'grid_view', path: '/dashboard' },
+    { id: PaginasApp.DASHBOARD, label: 'ASISTENCIA', icon: 'grid_view', path: '/dashboard' },
     { id: PaginasApp.ALUMNOS, label: 'ALUMNOS', icon: 'groups', path: '/alumnos' },
     { id: PaginasApp.EVALUACION, label: 'EVALUACIÓN', icon: 'analytics', path: '/evaluacion' },
     { id: PaginasApp.PAGOS, label: 'PAGOS', icon: 'account_balance_wallet', path: '/pagos' },
