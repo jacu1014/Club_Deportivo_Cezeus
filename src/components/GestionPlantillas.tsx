@@ -8,7 +8,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   const [cuerpo, setCuerpo] = useState('');
   const textareaRef = useRef(null);
 
-  // Mapeo completo de todos los campos de tu base de datos
+  // Mapeo unificado: Mantiene TODO lo anterior + Nuevos campos
   const GRUPOS_CAMPOS = {
     "Datos Alumno": [
       { label: '1er Nombre', tag: '[primer_nombre]' },
@@ -27,6 +27,13 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
       { label: 'Apellido 2', tag: '[acudiente_segundo_apellido]' },
       { label: 'Parentesco', tag: '[acudiente_parentesco]' },
       { label: 'Tel. Acudiente', tag: '[acudiente_telefono]' },
+    ],
+    "Cobros y Tarifas": [
+      { label: 'Valor Tarifa', tag: '[valor]', variant: 'emerald' },
+      { label: 'Nombre Tarifa', tag: '[nombre_tarifa]', variant: 'emerald' },
+      { label: 'Descripción', tag: '[descripcion_tarifa]', variant: 'emerald' },
+      { label: 'Mes Actual', tag: '[mes_actual]', variant: 'amber' },
+      { label: 'Año Actual', tag: '[año_actual]', variant: 'amber' },
     ],
     "Club / Registro": [
       { label: 'Categoría', tag: '[categoria]' },
@@ -48,7 +55,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   useEffect(() => { fetchPlantillas(); }, []);
 
   const fetchPlantillas = async () => {
-    const { data } = await supabase.from('plantillas_mensajes').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('plantillas_messages').select('*').order('created_at', { ascending: false });
     setPlantillas(data || []);
   };
 
@@ -67,8 +74,8 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
     if (!titulo || !cuerpo) return mostrarNotif("Completa los campos", "error");
     const payload = { titulo: titulo.toUpperCase(), cuerpo };
     const { error } = idEditando 
-      ? await supabase.from('plantillas_mensajes').update(payload).eq('id', idEditando)
-      : await supabase.from('plantillas_mensajes').insert([payload]);
+      ? await supabase.from('plantillas_messages').update(payload).eq('id', idEditando)
+      : await supabase.from('plantillas_messages').insert([payload]);
 
     if (!error) {
       mostrarNotif("Guardado con éxito", "success");
@@ -80,13 +87,20 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   const eliminar = async (id, e) => {
     e.stopPropagation();
     if(!window.confirm("¿Eliminar esta plantilla?")) return;
-    const { error } = await supabase.from('plantillas_mensajes').delete().eq('id', id);
+    const { error } = await supabase.from('plantillas_messages').delete().eq('id', id);
     if(!error) {
         mostrarNotif("Eliminado", "success");
         fetchPlantillas();
         if(idEditando === id) { setIdEditando(null); setTitulo(''); setCuerpo(''); }
     }
   }
+
+  // Función para determinar el estilo del botón según la variante
+  const getBtnStyle = (variant) => {
+    if (variant === 'emerald') return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-black";
+    if (variant === 'amber') return "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-black";
+    return "bg-primary/5 border-primary/10 text-primary hover:bg-primary hover:text-black";
+  };
 
   return (
     <section className="bg-slate-900/40 border border-white/10 rounded-[2.5rem] p-8 space-y-6 backdrop-blur-md">
@@ -109,7 +123,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
         />
 
         {/* SELECTOR DE ETIQUETAS DINÁMICO POR GRUPOS */}
-        <div className="space-y-3 max-h-52 overflow-y-auto pr-2 custom-scrollbar border border-white/5 p-4 rounded-2xl bg-black/20">
+        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar border border-white/5 p-4 rounded-2xl bg-black/20">
           {Object.entries(GRUPOS_CAMPOS).map(([grupo, campos]) => (
             <div key={grupo} className="space-y-2">
               <p className="text-[7px] text-slate-500 font-black uppercase tracking-[0.2em]">{grupo}</p>
@@ -118,7 +132,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
                   <button
                     key={campo.tag}
                     onClick={() => insertarEtiqueta(campo.tag)}
-                    className="px-2 py-1.5 bg-primary/5 border border-primary/10 rounded-lg text-[7px] text-primary font-bold uppercase hover:bg-primary hover:text-black transition-all"
+                    className={`px-2 py-1.5 border rounded-lg text-[7px] font-bold uppercase transition-all ${getBtnStyle(campo.variant)}`}
                   >
                     + {campo.label}
                   </button>
@@ -140,7 +154,6 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
         </button>
       </div>
 
-      {/* LISTA DE PLANTILLAS */}
       <div className="pt-4 border-t border-white/5 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
         {plantillas.map(p => (
           <div key={p.id} className="flex gap-2 group">
