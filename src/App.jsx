@@ -22,7 +22,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mantengo tu timeout de seguridad: si algo falla, la app inicia igual a los 5s
+    // Mantengo tu timeout: si algo falla con la red, la app arranca a los 5s
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn("La carga inicial tardó demasiado. Forzando inicio...");
@@ -67,8 +67,7 @@ function App() {
         supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
           .then(({ data }) => {
             setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
-            // IMPORTANTE: Aseguramos que si el login ocurre tras un refresh, quite el loading
-            setLoading(false); 
+            setLoading(false); // Apaga el loading tras recuperar el perfil
           });
       } else {
         setUser(null);
@@ -100,9 +99,21 @@ function App() {
     <>
       <Router>
         <Routes>
-          {/* Añadido 'replace' para evitar que el usuario vuelva al login con el botón de atrás */}
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
+          {/* Al entrar al login, si ya hay sesión, mandamos a /alumnos */}
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* RUTA PRINCIPAL: ALUMNOS */}
+          <Route 
+            path="/alumnos" 
+            element={
+              user && canAccess(PaginasApp.ALUMNOS) ? (
+                <MainLayout user={user}>
+                  <Alumnos />
+                </MainLayout>
+              ) : <Navigate to="/login" replace />
+            } 
+          />
 
           <Route 
             path="/dashboard" 
@@ -111,7 +122,7 @@ function App() {
                 <MainLayout user={user}>
                   <DashboardPage user={user} />
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/alumnos" replace />
             } 
           />
 
@@ -122,7 +133,7 @@ function App() {
                 <MainLayout user={user}>
                   <NotificacionesPage user={user} />
                 </MainLayout>
-              ) : <Navigate to={user ? "/dashboard" : "/login"} replace />
+              ) : <Navigate to="/alumnos" replace />
             } 
           />
 
@@ -134,17 +145,6 @@ function App() {
                   <Nosotros />
                 </MainLayout>
               ) : <Navigate to="/login" replace />
-            } 
-          />
-          
-          <Route 
-            path="/alumnos" 
-            element={
-              user && canAccess(PaginasApp.ALUMNOS) ? (
-                <MainLayout user={user}>
-                  <Alumnos />
-                </MainLayout>
-              ) : <Navigate to={user ? "/calendario" : "/login"} replace />
             } 
           />
 
@@ -181,9 +181,9 @@ function App() {
             } 
           />
 
-          {/* Redirecciones mejoradas para recarga */}
-          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+          {/* Redirecciones automáticas a Alumnos */}
+          <Route path="/" element={<Navigate to={user ? "/alumnos" : "/login"} replace />} />
+          <Route path="*" element={<Navigate to={user ? "/alumnos" : "/login"} replace />} />
         </Routes>
       </Router>
       <Analytics />
