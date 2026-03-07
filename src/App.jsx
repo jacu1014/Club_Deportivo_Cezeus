@@ -21,29 +21,29 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función auxiliar para obtener datos de la tabla 'usuarios' sin repetir código
-  const getProfile = async (userId) => {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    
-    if (error) console.error("Error consultando tabla usuarios:", error);
-    return data;
-  };
-
   useEffect(() => {
-    let isMounted = true;
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("La carga inicial tardó demasiado. Forzando inicio...");
+        setLoading(false);
+      }
+    }, 5000);
 
     const initApp = async () => {
       try {
-        // Obtenemos la sesión actual de forma asíncrona
         const { data: { session }, error: authError } = await supabase.auth.getSession();
+        
         if (authError) throw authError;
 
-        if (session?.user && isMounted) {
-          const dbUser = await getProfile(session.user.id);
+        if (session?.user) {
+          const { data: dbUser, error: dbError } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (dbError) console.error("Error consultando tabla usuarios:", dbError);
+
           setUser(dbUser || { 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
@@ -54,31 +54,27 @@ function App() {
       } catch (error) {
         console.error("Error crítico en initApp:", error.message);
       } finally {
-        if (isMounted) setLoading(false);
+        setLoading(false);
+        clearTimeout(timeout);
       }
     };
 
     initApp();
 
-    // Escuchamos cambios de auth (login, logout, refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        const dbUser = await getProfile(session.user.id);
-        if (isMounted) {
-          setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
-          setLoading(false);
-        }
+        supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
+          .then(({ data }) => {
+            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+          });
       } else {
-        if (isMounted) {
-          setUser(null);
-          setLoading(false);
-        }
+        setUser(null);
       }
     });
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
+      clearTimeout(timeout);
     };
   }, []);
 
@@ -87,7 +83,6 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   };
 
-  // Pantalla de carga (Splash Screen)
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -101,11 +96,10 @@ function App() {
     <>
       <Router>
         <Routes>
-          {/* Si hay usuario, el Login redirige a Alumnos o Dashboard automáticamente */}
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" replace />} />
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* DASHBOARD */}
+          {/* --- NUEVA RUTA: DASHBOARD --- */}
           <Route 
             path="/dashboard" 
             element={
@@ -113,11 +107,11 @@ function App() {
                 <MainLayout user={user}>
                   <DashboardPage user={user} />
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/login" />
             } 
           />
 
-          {/* NOTIFICACIONES */}
+          {/* --- NUEVA RUTA: NOTIFICACIONES --- */}
           <Route 
             path="/notificaciones" 
             element={
@@ -125,11 +119,10 @@ function App() {
                 <MainLayout user={user}>
                   <NotificacionesPage user={user} />
                 </MainLayout>
-              ) : <Navigate to={user ? "/dashboard" : "/login"} replace />
+              ) : <Navigate to={user ? "/dashboard" : "/login"} />
             } 
           />
 
-          {/* NOSOTROS */}
           <Route 
             path="/nosotros" 
             element={
@@ -137,11 +130,10 @@ function App() {
                 <MainLayout user={user}>
                   <Nosotros />
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/login" />
             } 
           />
           
-          {/* ALUMNOS */}
           <Route 
             path="/alumnos" 
             element={
@@ -149,11 +141,10 @@ function App() {
                 <MainLayout user={user}>
                   <Alumnos />
                 </MainLayout>
-              ) : <Navigate to={user ? "/calendario" : "/login"} replace />
+              ) : <Navigate to={user ? "/calendario" : "/login"} />
             } 
           />
 
-          {/* CALENDARIO */}
           <Route 
             path="/calendario" 
             element={
@@ -161,11 +152,10 @@ function App() {
                 <MainLayout user={user}>
                   <CalendarioPage userRol={user.rol} />
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/login" />
             } 
           />
 
-          {/* CONFIGURACIÓN */}
           <Route 
             path="/configuracion" 
             element={
@@ -173,11 +163,10 @@ function App() {
                 <MainLayout user={user}>
                   <Configuracion user={user} />
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/login" />
             } 
           />
 
-          {/* PAGOS */}
           <Route 
             path="/pagos" 
             element={
@@ -185,16 +174,16 @@ function App() {
                 <MainLayout user={user}>
                   <PagosModule user={user} /> 
                 </MainLayout>
-              ) : <Navigate to="/login" replace />
+              ) : <Navigate to="/login" />
             } 
           />
 
-          {/* REDIRECCIONES POR DEFECTO */}
-          <Route path="/" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} replace />} />
+          <Route path="/" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
+          <Route path="*" element={<Navigate to={user ? (user.rol === 'ALUMNO' ? "/alumnos" : "/calendario") : "/login"} />} />
         </Routes>
       </Router>
       
+      {/* NUEVO: Componente de Analítica (fuera del Router para rastrear todo) */}
       <Analytics />
     </>
   );
