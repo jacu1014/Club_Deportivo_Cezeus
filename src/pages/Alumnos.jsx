@@ -4,9 +4,6 @@ import { useOutletContext } from 'react-router-dom';
 import SeguimientoAlumno from '../components/SeguimientoAlumno';
 import FormularioRegistroAlumno from '../components/FormularioRegistroAlumno';
 import GestorCarnetDigital from '../components/GestorCarnetDigital';
-// --- NUEVAS IMPORTACIONES ---
-import { ClubSection } from '../components/Configuracion/ClubSection';
-import { StaffSection } from '../components/Configuracion/StaffSection';
 import { supabase } from '../lib/supabaseClient'; 
 
 const AlumnosModule = () => {
@@ -34,6 +31,7 @@ const AlumnosModule = () => {
     fetchUserManual();
   }, [user]);
 
+  // --- VALIDACIONES DE ROL ---
   const isAdmin = user && [
     RolUsuario.ADMINISTRATIVO, 
     RolUsuario.DIRECTOR, 
@@ -43,6 +41,8 @@ const AlumnosModule = () => {
   ].includes(user?.rol);
 
   const isAlumno = user?.rol === RolUsuario.ALUMNO || user?.rol === 'ALUMNO';
+  
+  // Identificamos al Entrenador
   const isEntrenador = user?.rol === RolUsuario.ENTRENADOR || user?.rol === 'ENTRENADOR';
 
   useEffect(() => {
@@ -89,21 +89,7 @@ const AlumnosModule = () => {
           </button>
         )}
 
-        {/* --- NUEVAS PESTAÑAS --- */}
-        <button 
-          onClick={() => setActiveTab('CLUB')} 
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'CLUB' ? 'bg-primary text-[#0a1118]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-        >
-          <span className="material-symbols-outlined text-sm">shield</span> Club
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('STAFF')} 
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'STAFF' ? 'bg-primary text-[#0a1118]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-        >
-          <span className="material-symbols-outlined text-sm">groups</span> Staff
-        </button>
-
+        {/* RESTRICCIÓN VISUAL: Solo se muestra si NO es entrenador */}
         {!isEntrenador && (
           <button 
             onClick={() => setActiveTab('CARNET')} 
@@ -127,20 +113,8 @@ const AlumnosModule = () => {
             <FormularioRegistroAlumno />
           </div>
         )}
-
-        {/* --- RENDERIZADO DE NUEVAS SECCIONES --- */}
-        {activeTab === 'CLUB' && (
-          <div className="animate-in fade-in duration-500">
-            <ClubSection />
-          </div>
-        )}
-
-        {activeTab === 'STAFF' && (
-          <div className="animate-in fade-in duration-500">
-            <StaffSection />
-          </div>
-        )}
         
+        {/* RESTRICCIÓN DE CONTENIDO: Solo renderiza el Gestor si NO es entrenador */}
         {activeTab === 'CARNET' && !isEntrenador && (
           <div className="animate-in slide-in-from-right-4 duration-500">
             <GestorCarnetDigital user={user} alumnoPreseleccionado={alumnoSeleccionado} />

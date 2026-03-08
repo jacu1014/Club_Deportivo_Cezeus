@@ -3,7 +3,7 @@ import { User, Usuario } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
 
-// Importación de módulos
+// --- IMPORTANTE: Usar llaves { } si en el archivo usaste "export const" ---
 import { PerfilSection } from '../components/Configuracion/PerfilSection';
 import { StaffSection } from '../components/Configuracion/StaffSection';
 import { ClubSection } from '../components/Configuracion/ClubSection';
@@ -30,8 +30,7 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
   const fetchStaff = async () => {
     try {
       setLoadingStaff(true);
-      // Traemos a todos los usuarios para que ClubSection pueda contar alumnos
-      // Pero para la pestaña Staff, seguiremos usando el filtro visual.
+      // Traemos todos para que ClubSection cuente alumnos y staff correctamente
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
@@ -46,8 +45,8 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
     }
   };
 
-  // Efecto actualizado: Carga datos si entras a Staff O a Club
   useEffect(() => {
+    // Carga datos si se entra a Staff o a Club para que las estadísticas estén vivas
     if ((activeTab === 'staff' && canSeeStaff) || (activeTab === 'club' && canManageClub)) {
       fetchStaff();
     }
@@ -134,7 +133,6 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
                 Nuevo Staff
               </button>
             </div>
-            {/* Filtramos aquí para no mostrar Alumnos en la lista de Staff */}
             <StaffSection 
               staff={staff.filter(u => u.rol !== 'ALUMNO')} 
               loading={loadingStaff} 
@@ -148,7 +146,7 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
           </div>
         )}
 
-        {/* CORRECCIÓN AQUÍ: Se pasa la prop staff para evitar el pantallazo negro */}
+        {/* --- CLUB SECTION --- */}
         {activeTab === 'club' && canManageClub && (
           <ClubSection staff={staff} />
         )}
