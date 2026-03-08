@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
@@ -20,8 +20,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función reutilizable para obtener datos del usuario desde la DB
-  const fetchUserData = async (userId) => {
+  // OPTIMIZACIÓN: Memoizamos la función para evitar recrearla en cada render
+  const fetchUserData = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
         .from('usuarios')
@@ -35,22 +35,24 @@ function App() {
       console.error("Error al obtener datos del usuario:", err);
       return null;
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // Timeout de seguridad para evitar pantalla de carga infinita
+    let isMounted = true;
+
+    // Timeout de seguridad aumentado a 6s para conexiones lentas
     const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("La carga inicial tardó demasiado. Forzando inicio...");
+      if (loading && isMounted) {
+        console.warn("⏱️ Tiempo de espera agotado. Forzando render...");
         setLoading(false);
       }
-    }, 5000);
+    }, 6000);
 
     const initApp = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user) {
+        if (session?.user && isMounted) {
           const dbUser = await fetchUserData(session.user.id);
           setUser(dbUser || { 
             id: session.user.id, 
@@ -62,8 +64,10 @@ function App() {
       } catch (error) {
         console.error("Error crítico en initApp:", error.message);
       } finally {
-        setLoading(false);
-        clearTimeout(timeout);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(timeout);
+        }
       }
     };
 
@@ -71,50 +75,59 @@ function App() {
 
     // Listener de cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const dbUser = await fetchUserData(session.user.id);
-        setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
-      } else {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          const dbUser = await fetchUserData(session.user.id);
+          setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
-      setLoading(false); // Asegura que el loading se apague tras cambios de auth
+      
+      if (isMounted) setLoading(false);
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, []);
+  }, [fetchUserData]); // Agregamos la dependencia memoizada
 
   const canAccess = (page) => {
     if (!user) return false;
-    return ROLE_PERMISSIONS[user.rol]?.includes(page);
+    // Manejo seguro de roles inexistentes en ROLE_PERMISSIONS
+    return ROLE_PERMISSIONS[user.rol]?.includes(page) || false;
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Iniciando Cezeus</p>
+        <div className="relative">
+          <div className="w-12 h-12 border-4 border-cyan-400/10 border-t-cyan-400 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-b-cyan-400/30 rounded-full animate-pulse"></div>
+        </div>
+        <p className="text-cyan-400 text-[9px] font-black uppercase tracking-[0.4em] mt-6 animate-pulse">
+          Cargando Sistema Cezeus
+        </p>
       </div>
     );
   }
 
-  // Definimos la ruta de inicio por defecto según tu lógica original
   const getHomeRoute = () => {
     if (!user) return "/login";
-    return user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
   };
 
   return ( 
     <>
       <Router>
         <Routes>
-          {/* Login redirige a alumnos si ya hay usuario */}
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/alumnos" replace />} />
+          {/* Rutas Públicas */}
+          <Route path="/login" element={!user ? <Login /> : <Navigate to={getHomeRoute()} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Rutas Protegidas */}
+          {/* Rutas Protegidas unificadas bajo validación de usuario */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? (
             <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
@@ -143,7 +156,7 @@ function App() {
             <MainLayout user={user}><PagosModule user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
 
-          {/* Redirecciones Finales */}
+          {/* Fallbacks */}
           <Route path="/" element={<Navigate to={getHomeRoute()} replace />} />
           <Route path="*" element={<Navigate to={getHomeRoute()} replace />} />
         </Routes>

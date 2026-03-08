@@ -7,50 +7,64 @@ const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // Estado para el ojo
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
+    // Usamos una bandera para evitar que signOut se ejecute dos veces en StrictMode
+    let isMounted = true;
+
     const clearSession = async () => {
-      await supabase.auth.signOut();
-      localStorage.clear();
-      sessionStorage.clear();
-      console.log("🧼 Sesión limpia lista para nuevo intento.");
+      try {
+        // Solo limpiamos si es la primera carga
+        await supabase.auth.signOut();
+        if (isMounted) {
+          localStorage.clear();
+          sessionStorage.clear();
+          console.log("🧼 Sesión limpia lista.");
+        }
+      } catch (e) {
+        console.warn("Aviso de limpieza:", e.message);
+      }
     };
+
     clearSession();
+    return () => { isMounted = false; };
   }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password: password,
       });
 
       if (authError) throw authError;
 
-      const userId = data.user.id;
-      console.log("✅ Auth exitoso. UID:", userId);
+      if (data?.user) {
+        console.log("✅ Auth exitoso. UID:", data.user.id);
+        
+        // Verificamos el perfil en la tabla usuarios
+        const { data: usuario, error: dbError } = await supabase
+          .from('usuarios')
+          .select('rol, primer_nombre')
+          .eq('id', data.user.id)
+          .maybeSingle();
 
-      const { data: usuario, error: dbError } = await supabase
-        .from('usuarios')
-        .select('rol, primer_nombre')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (dbError || !usuario) {
-        console.warn("⚠️ Perfil no encontrado en DB, pero Auth es correcto.");
+        if (dbError) console.error("Error al buscar perfil:", dbError.message);
+        
+        console.log("🏆 Acceso concedido.");
+        navigate('/alumnos');
       }
-
-      console.log("🏆 Acceso concedido.");
-      navigate('/alumnos');
 
     } catch (err) {
       console.error("🛑 Error:", err.message);
@@ -59,7 +73,7 @@ const Login = () => {
         'Email not confirmed': 'Debes confirmar tu correo electrónico.',
         'Email logins are disabled': 'El acceso por email está desactivado.'
       };
-      setError(errorMessages[err.message] || err.message);
+      setError(errorMessages[err.message] || "Error al intentar ingresar. Verifica tus datos.");
     } finally {
       setLoading(false);
     }
@@ -77,6 +91,7 @@ const Login = () => {
       });
       if (resetError) throw resetError;
       setSuccessMessage('¡Listo! Revisa tu bandeja de entrada.');
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,6 +101,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-cezeus-dark flex items-center justify-center p-6 relative overflow-hidden font-display">
+      {/* Fondo Decorativo */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-primary/30 rounded-full animate-pulse"></div>
       </div>
@@ -101,36 +117,35 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
+            <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email</label>
               <input 
                 required
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700"
+                className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700 text-sm"
                 placeholder="tu@email.com"
               />
             </div>
 
-            <div className="relative">
+            <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Contraseña</label>
-              <div className="relative">
+              <div className="relative group">
                 <input 
                   required
                   type={showPassword ? "text" : "password"} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 pr-12 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700"
+                  className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 pr-12 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700 text-sm"
                   placeholder="••••••••"
                 />
-                {/* BOTÓN CON ICONO MATERIAL SYMBOLS */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors flex items-center justify-center"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors flex items-center justify-center p-1"
                 >
-                  <span className="material-symbols-outlined text-xl select-none">
+                  <span className="material-symbols-outlined text-[20px] select-none">
                     {showPassword ? 'visibility_off' : 'visibility'}
                   </span>
                 </button>
@@ -138,7 +153,7 @@ const Login = () => {
             </div>
 
             {(error || successMessage) && (
-              <div className={`p-4 rounded-xl border text-[10px] font-bold text-center uppercase tracking-widest leading-relaxed ${
+              <div className={`p-4 rounded-xl border text-[10px] font-bold text-center uppercase tracking-widest leading-relaxed animate-in fade-in duration-300 ${
                 error ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-primary/10 border-primary/20 text-primary'
               }`}>
                 {error || successMessage}
@@ -148,9 +163,14 @@ const Login = () => {
             <button 
               disabled={loading}
               type="submit"
-              className="w-full bg-primary hover:bg-[#11d8d8] text-cezeus-dark font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="w-full bg-primary hover:bg-[#11d8d8] text-cezeus-dark font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 mt-2"
             >
-              {loading ? 'Verificando...' : 'Entrar al Club'}
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-cezeus-dark border-t-transparent rounded-full animate-spin"></div>
+                  <span>Verificando...</span>
+                </div>
+              ) : 'Entrar al Club'}
             </button>
           </form>
 
