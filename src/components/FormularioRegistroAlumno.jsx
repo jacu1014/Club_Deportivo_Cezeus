@@ -19,7 +19,9 @@ const FormularioRegistroAlumno = () => {
   
   const [parentesco, setParentesco] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
-  // NUEVO: Estado para fecha de inscripción (inicia con la fecha actual)
+  // NUEVO: Estado para visibilidad de contraseña
+  const [showPassword, setShowPassword] = useState(false);
+  
   const [fechaInscripcion, setFechaInscripcion] = useState(new Date().toISOString().split('T')[0]);
   const [categoriaAuto, setCategoriaAuto] = useState('Esperando fecha...');
   const [contacto1, setContacto1] = useState(''); 
@@ -104,7 +106,7 @@ const FormularioRegistroAlumno = () => {
         tipo_documento: formData.get('tipo_documento'),
         numero_documento: numDoc,
         fecha_nacimiento: fechaNacimiento,
-        fecha_inscripcion: fechaInscripcion, // CAMBIO: Se incluye el nuevo campo
+        fecha_inscripcion: fechaInscripcion, 
         telefono: contacto1,
         foto_url: publicUrlFinal,
         direccion: formData.get('direccion')?.trim().toUpperCase(),
@@ -177,7 +179,15 @@ const FormularioRegistroAlumno = () => {
             <section className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-6 space-y-4">
                 <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] italic text-primary">Credenciales de Acceso</h3>
                 <Input name="email" type="email" label="Correo Electrónico" required />
-                <Input name="password" type="password" label="Contraseña del Alumno" required />
+                <Input 
+                  name="password" 
+                  type={showPassword ? "text" : "password"} 
+                  label="Contraseña del Alumno" 
+                  required 
+                  isPassword
+                  onToggleVisible={() => setShowPassword(!showPassword)}
+                  visibleStatus={showPassword}
+                />
             </section>
         </div>
 
@@ -192,13 +202,11 @@ const FormularioRegistroAlumno = () => {
                     <Select name="tipo_documento" label="Tipo Documento" options={TIPOS_DOCUMENTO} required />
                     <Input name="numero_documento" label="No. Documento" required />
                     
-                    {/* FECHA DE NACIMIENTO */}
                     <div className="space-y-1">
                         <label className="text-[9px] text-slate-500 font-bold uppercase ml-1 tracking-widest">Fecha Nacimiento</label>
                         <input type="date" value={fechaNacimiento} onChange={handleFechaChange} required className="w-full bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary [color-scheme:dark]" />
                     </div>
 
-                    {/* CAMBIO: NUEVO CAMPO FECHA DE INSCRIPCIÓN (Ubicado con datos del deportista) */}
                     <div className="space-y-1">
                         <label className="text-[9px] text-slate-500 font-bold uppercase ml-1 tracking-widest">Fecha de Inscripción</label>
                         <input type="date" value={fechaInscripcion} onChange={(e) => setFechaInscripcion(e.target.value)} required className="w-full bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary [color-scheme:dark]" />
@@ -251,11 +259,32 @@ const FormularioRegistroAlumno = () => {
   );
 };
 
-// Sub-componentes
-const Input = ({ label, name, type = "text", required, value, onChange }) => (
+// Sub-componentes actualizados para soportar visibilidad
+const Input = ({ label, name, type = "text", required, value, onChange, isPassword, onToggleVisible, visibleStatus }) => (
     <div className="flex flex-col gap-1">
       <label className="text-[9px] text-slate-500 font-bold uppercase ml-1 tracking-widest">{label}</label>
-      <input name={name} type={type} required={required} value={value} onChange={onChange} autoComplete="off" className="bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary transition-all" />
+      <div className="relative">
+        <input 
+          name={name} 
+          type={type} 
+          required={required} 
+          value={value} 
+          onChange={onChange} 
+          autoComplete="off" 
+          className={`w-full bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary transition-all ${isPassword ? 'pr-10' : ''}`} 
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={onToggleVisible}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors flex items-center justify-center"
+          >
+            <span className="material-symbols-outlined text-lg select-none">
+              {visibleStatus ? 'visibility_off' : 'visibility'}
+            </span>
+          </button>
+        )}
+      </div>
     </div>
 );
   
