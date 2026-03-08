@@ -106,7 +106,7 @@ function App() {
     return user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
   };
 
-  return (
+  return ( 
     <>
       <Router>
         <Routes>
