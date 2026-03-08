@@ -5,8 +5,8 @@ import SeguimientoAlumno from '../components/SeguimientoAlumno';
 import FormularioRegistroAlumno from '../components/FormularioRegistroAlumno';
 import GestorCarnetDigital from '../components/GestorCarnetDigital';
 // --- NUEVAS IMPORTACIONES ---
-import ClubSection from '../components/Configuracion/ClubSection';
-import StaffSection from '../components/Configuracion/StaffSection';
+import { ClubSection } from '../components/Configuracion/ClubSection';
+import { StaffSection } from '../components/Configuracion/StaffSection';
 import { supabase } from '../lib/supabaseClient'; 
 
 const AlumnosModule = () => {
