@@ -29,7 +29,6 @@ const Login = () => {
     setSuccessMessage(null);
 
     try {
-      // 1. Autenticación con Supabase Auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
@@ -40,18 +39,14 @@ const Login = () => {
       const userId = data.user.id;
       console.log("✅ Auth exitoso. UID:", userId);
 
-      // 2. Consulta a la tabla 'usuarios'
       const { data: usuario, error: dbError } = await supabase
         .from('usuarios')
         .select('rol, primer_nombre')
         .eq('id', userId)
         .maybeSingle();
 
-      // --- LOGICA DE ACCESO FLEXIBLE ---
       if (dbError || !usuario) {
         console.warn("⚠️ Perfil no encontrado en DB, pero Auth es correcto.");
-        // Si quieres bloquear si no hay perfil, descomenta la línea de abajo:
-        // throw new Error('Usuario autenticado pero sin perfil en la base de datos.');
       }
 
       console.log("🏆 Acceso concedido.");
@@ -129,12 +124,15 @@ const Login = () => {
                   className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 pr-12 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700"
                   placeholder="••••••••"
                 />
+                {/* BOTÓN CON ICONO MATERIAL SYMBOLS */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors text-xl"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors flex items-center justify-center"
                 >
-                  {showPassword ? "👁️‍🗨️" : "👁️"}
+                  <span className="material-symbols-outlined text-xl select-none">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
                 </button>
               </div>
             </div>
