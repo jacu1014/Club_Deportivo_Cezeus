@@ -23,6 +23,9 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fechaNacimiento, setFechaNacimiento] = useState('');
+  
+  // --- NUEVO ESTADO PARA VISIBILIDAD DE CONTRASEÑA ---
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -32,6 +35,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       } else {
         setFechaNacimiento('');
         setFotoPreview(null);
+        setShowPassword(false); // Reset al abrir nuevo
       }
     }
   }, [isOpen, usuarioAEditar]);
@@ -42,28 +46,22 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   };
   
   const borrarFotoAntigua = async (urlAntigua: string | null) => {
-  if (!urlAntigua) return;
-
-  try {
-    // Extraemos el path del archivo de la URL pública
-    // La URL suele ser: .../storage/v1/object/public/Fotos_Administrativos/staff/ID/nombre.jpg?t=...
-    const urlSinParams = urlAntigua.split('?')[0];
-    const partes = urlSinParams.split('Fotos_Administrativos/');
-    
-    if (partes.length > 1) {
-      const filePathParaBorrar = partes[1];
-      
-      const { error } = await supabaseAdmin.storage
-        .from('Fotos_Administrativos')
-        .remove([filePathParaBorrar]);
-
-      if (error) console.error("Error al borrar foto antigua:", error.message);
-      else console.log("✅ Foto antigua eliminada del Storage");
+    if (!urlAntigua) return;
+    try {
+      const urlSinParams = urlAntigua.split('?')[0];
+      const partes = urlSinParams.split('Fotos_Administrativos/');
+      if (partes.length > 1) {
+        const filePathParaBorrar = partes[1];
+        const { error } = await supabaseAdmin.storage
+          .from('Fotos_Administrativos')
+          .remove([filePathParaBorrar]);
+        if (error) console.error("Error al borrar foto antigua:", error.message);
+      }
+    } catch (err) {
+      console.error("Error procesando borrado de foto:", err);
     }
-  } catch (err) {
-    console.error("Error procesando borrado de foto:", err);
-  }
-};
+  };
+
   const ejecutarProcesoStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
@@ -79,7 +77,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
     let authUserId = usuarioAEditar?.id || null;
 
     try {
-      // --- PASO 1: AUTH ---
       if (!usuarioAEditar) {
         const { data: check } = await supabaseAdmin
           .from('usuarios')
@@ -100,19 +97,15 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         authUserId = authData.user?.id;
       }
 
-      // --- PASO 2: STORAGE (OPTIMIZADO) ---
       let publicUrlFinal = usuarioAEditar?.foto_url || null; 
       const fotoArchivo = fileInputRef.current?.files?.[0];
 
       if (fotoArchivo && authUserId) {
         setStatusText('Subiendo foto...');
-        
-        // 1. SI EXISTE UNA FOTO PREVIA, LA BORRAMOS DEL STORAGE--
         if (usuarioAEditar?.foto_url) {
           await borrarFotoAntigua(usuarioAEditar.foto_url);
         }
 
-        // 2. CONTINUAMOS CON LA SUBIDA NORMAL...
         const fileExt = fotoArchivo.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `staff/${authUserId}/${fileName}`;
@@ -129,15 +122,10 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
           const { data } = supabaseAdmin.storage
             .from('Fotos_Administrativos')
             .getPublicUrl(filePath);
-          
-          // Agregamos query param de tiempo para forzar al navegador a ignorar caché de URL previa
           publicUrlFinal = `${data.publicUrl}?t=${Date.now()}`;
-        } else {
-          console.error("Error subiendo a Storage:", upError.message);
         }
       }
 
-      // --- PASO 3: BASE DE DATOS (TABLA USUARIOS) --
       setStatusText('Guardando en DB...');
       const estadoSeleccionado = formData.get('estado')?.toString() || 'Activo';
 
@@ -182,8 +170,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       }, 1000);
 
     } catch (err: any) {
-      console.error("🛑 ERROR:", err);
-      // Rollback de Auth si falla la DB en creación
       if (!usuarioAEditar && authUserId) {
         await supabaseAdmin.auth.admin.deleteUser(authUserId);
       }
@@ -223,7 +209,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
 
         <form onSubmit={ejecutarProcesoStaff} className="p-8 grid grid-cols-1 xl:grid-cols-12 gap-8">
           
-          {/* COLUMNA IZQUIERDA: FOTO Y ACCESO */}
           <div className="xl:col-span-4 space-y-6">
             <section className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-6 text-center">
                 <div 
@@ -231,15 +216,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                   className="w-40 h-48 mx-auto bg-slate-800 border-2 border-dashed border-white/10 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden group relative transition-all hover:border-primary/50"
                 >
                     {fotoPreview ? (
-                      <img 
-                        src={fotoPreview} 
-                        className="w-full h-full object-cover" 
-                        alt="preview" 
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          setFotoPreview(null);
-                        }}
-                      />
+                      <img src={fotoPreview} className="w-full h-full object-cover" alt="preview" />
                     ) : (
                       <span className="material-symbols-outlined text-4xl text-slate-600">add_a_photo</span>
                     )}
@@ -247,7 +224,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                        if (fotoPreview?.startsWith('blob:')) URL.revokeObjectURL(fotoPreview); // Limpia la anterior
+                        if (fotoPreview?.startsWith('blob:')) URL.revokeObjectURL(fotoPreview);
                         setFotoPreview(URL.createObjectURL(file));
                     }
                 }} />
@@ -257,7 +234,20 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
             <section className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-6 space-y-4">
                 <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] italic text-primary">Acceso</h3>
                 <Input name="email" type="email" label="Correo Institucional" defaultValue={usuarioAEditar?.email} required disabled={!!usuarioAEditar} />
-                {!usuarioAEditar && <Input name="password" type="password" label="Contraseña Temporal" required />}
+                
+                {/* --- CAMPO DE CONTRASEÑA ACTUALIZADO --- */}
+                {!usuarioAEditar && (
+                  <Input 
+                    name="password" 
+                    type={showPassword ? "text" : "password"} 
+                    label="Contraseña Temporal" 
+                    required 
+                    isPassword={true}
+                    showPassword={showPassword}
+                    togglePassword={() => setShowPassword(!showPassword)}
+                  />
+                )}
+
                 <Select 
                   name="rol" 
                   label="Rol" 
@@ -274,7 +264,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
             </section>
           </div>
 
-          {/* COLUMNA DERECHA: DATOS PERSONALES */}
           <div className="xl:col-span-8 space-y-6">
             <div className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-8">
                 <h3 className="text-white text-[10px] font-black uppercase tracking-widest mb-6 italic text-primary">Información Personal</h3>
@@ -321,11 +310,32 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   );
 };
 
-// COMPONENTES AUXILIARES INTERNOS
-const Input = ({ label, name, type = "text", required, defaultValue, disabled }: any) => (
+// --- COMPONENTES AUXILIARES ACTUALIZADOS CON SOPORTE PARA ICONO ---
+const Input = ({ label, name, type = "text", required, defaultValue, disabled, isPassword, showPassword, togglePassword }: any) => (
   <div className="flex flex-col gap-1">
     <label className="text-[9px] text-slate-500 font-bold uppercase ml-1 tracking-widest">{label}</label>
-    <input name={name} type={type} required={required} defaultValue={defaultValue} disabled={disabled} autoComplete="off" className="bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary disabled:opacity-30 transition-all uppercase placeholder:lowercase" />
+    <div className="relative">
+      <input 
+        name={name} 
+        type={type} 
+        required={required} 
+        defaultValue={defaultValue} 
+        disabled={disabled} 
+        autoComplete={isPassword ? "new-password" : "off"} 
+        className={`w-full bg-slate-800 border-none rounded-xl p-3 text-white text-xs outline-none focus:ring-1 ring-primary disabled:opacity-30 transition-all uppercase placeholder:lowercase ${isPassword ? 'pr-10' : ''}`} 
+      />
+      {isPassword && (
+        <button
+          type="button"
+          onClick={togglePassword}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors flex items-center justify-center"
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {showPassword ? 'visibility_off' : 'visibility'}
+          </span>
+        </button>
+      )}
+    </div>
   </div>
 );
 
