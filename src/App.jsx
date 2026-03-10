@@ -20,7 +20,6 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Función para obtener datos extendidos del usuario desde la tabla 'usuarios'
   const fetchUserData = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
@@ -40,9 +39,17 @@ function App() {
   useEffect(() => {
     let isMounted = true;
 
+    // RESCATE: Si en 4 segundos no ha sincronizado, forzamos el apagado del loader
+    const rescueTimeout = setTimeout(() => {
+      if (loading && isMounted) {
+        console.warn("Sincronización lenta: forzando visualización.");
+        setLoading(false);
+      }
+    }, 4000);
+
     const initApp = async () => {
       try {
-        // Intentamos recuperar la sesión persistente de Supabase
+        // Al dar F5, esto busca el token en LocalStorage
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
@@ -53,25 +60,25 @@ function App() {
             setUser(dbUser || { 
               id: session.user.id, 
               primer_nombre: 'Usuario', 
-              primer_apellido: 'Cezeus', 
               rol: 'ALUMNO' 
             });
           }
+        } else {
+          if (isMounted) setUser(null);
         }
       } catch (error) {
-        console.error("Error crítico en initApp:", error.message);
+        console.error("Error en initApp:", error.message);
         if (isMounted) setUser(null);
       } finally {
-        // ESTO ES CLAVE: pase lo que pase, dejamos de mostrar la pantalla de carga
         if (isMounted) {
           setLoading(false);
+          clearTimeout(rescueTimeout);
         }
       }
     };
 
     initApp();
 
-    // Escuchamos cambios de estado (Login, Logout, Token renovado)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
 
@@ -94,28 +101,20 @@ function App() {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      clearTimeout(rescueTimeout);
     };
   }, [fetchUserData]);
 
-  // Validación de permisos según el rol del usuario
   const canAccess = (page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page) || false;
   };
 
-  // Función para determinar la ruta de inicio según el rol
-  const getHomeRoute = () => {
-    if (!user) return "/login";
-    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
-  };
-
-  // Pantalla de carga mientras se sincroniza la sesión
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="relative">
           <div className="w-12 h-12 border-4 border-cyan-400/10 border-t-cyan-400 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-b-cyan-400/30 rounded-full animate-pulse"></div>
         </div>
         <p className="text-cyan-400 text-[9px] font-black uppercase tracking-[0.4em] mt-6 animate-pulse">
           Sincronizando Cezeus
@@ -124,15 +123,18 @@ function App() {
     );
   }
 
+  const getHomeRoute = () => {
+    if (!user) return "/login";
+    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
+  };
+
   return ( 
     <>
       <Router>
         <Routes>
-          {/* Rutas Públicas */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to={getHomeRoute()} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Rutas Protegidas */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? (
             <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
@@ -161,7 +163,6 @@ function App() {
             <MainLayout user={user}><PagosModule user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
 
-          {/* Fallbacks y Redirecciones Automáticas */}
           <Route path="/" element={<Navigate to={getHomeRoute()} replace />} />
           <Route path="*" element={<Navigate to={getHomeRoute()} replace />} />
         </Routes>
