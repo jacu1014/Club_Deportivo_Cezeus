@@ -13,12 +13,11 @@ const Login = () => {
   const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
-    // Usamos una bandera para evitar que signOut se ejecute dos veces en StrictMode
     let isMounted = true;
 
     const clearSession = async () => {
       try {
-        // Solo limpiamos si es la primera carga
+        // Al cargar el login, nos aseguramos de que no haya sesiones activas colgadas
         await supabase.auth.signOut();
         if (isMounted) {
           localStorage.clear();
@@ -43,6 +42,11 @@ const Login = () => {
     setSuccessMessage(null);
 
     try {
+      // LIMPIEZA DE CHOQUE: Antes de intentar el login, borramos cualquier rastro 
+      // para evitar el error de "Multiple GoTrueClient instances"
+      await supabase.auth.signOut();
+      localStorage.removeItem('cezeus-auth-token'); 
+
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password,
@@ -63,7 +67,9 @@ const Login = () => {
         if (dbError) console.error("Error al buscar perfil:", dbError.message);
         
         console.log("🏆 Acceso concedido.");
-        navigate('/alumnos');
+        // Redirigimos según el rol para evitar que se quede en blanco tras el F5
+        const destiny = usuario?.rol === 'ALUMNO' ? '/alumnos' : '/dashboard';
+        navigate(destiny);
       }
 
     } catch (err) {
@@ -101,7 +107,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-cezeus-dark flex items-center justify-center p-6 relative overflow-hidden font-display">
-      {/* Fondo Decorativo */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-primary/30 rounded-full animate-pulse"></div>
       </div>
