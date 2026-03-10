@@ -16,6 +16,9 @@ import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
 
+// Componente Nuevo
+import TermsModal from './components/TermsModal';
+
 // --- COMPONENTE DE RUTA PROTEGIDA ---
 const ProtectedRoute = ({ user, page, canAccess, children }) => {
   if (!user) return <Navigate to="/login" replace />;
@@ -31,11 +34,32 @@ const ProtectedRoute = ({ user, page, canAccess, children }) => {
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [legalText, setLegalText] = useState('');
 
   const canAccess = (page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   };
+
+  // Cargar texto del consentimiento desde configuraciones_club
+  useEffect(() => {
+    const fetchLegal = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('configuraciones_club')
+          .select('descripcion')
+          .eq('nombre_tarifa', 'legal_consentimiento')
+          .single();
+        
+        if (error) throw error;
+        if (data) setLegalText(data.descripcion);
+      } catch (err) {
+        console.error("Error cargando consentimiento:", err.message);
+      }
+    };
+
+    fetchLegal();
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -59,7 +83,8 @@ function App() {
           setUser(dbUser || { 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
-            rol: 'ALUMNO' 
+            rol: 'ALUMNO',
+            acepta_terminos: false 
           });
         }
       } catch (error) {
@@ -76,7 +101,7 @@ function App() {
       if (session?.user) {
         supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
           .then(({ data }) => {
-            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO', acepta_terminos: false });
           });
       } else {
         setUser(null);
@@ -149,7 +174,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* Redirección inteligente corregida */}
+          {/* Redirección inteligente */}
           <Route 
             path="/" 
             element={
@@ -173,6 +198,16 @@ function App() {
           />
         </Routes>
       </Router>
+
+      {/* MODAL DE TÉRMINOS (Fuera del Router para bloquear todo) */}
+      {user && !user.acepta_terminos && legalText && (
+        <TermsModal 
+          user={user} 
+          content={legalText} 
+          onAccepted={() => setUser(prev => ({ ...prev, acepta_terminos: true }))} 
+        />
+      )}
+
       <Analytics />
     </>
   );
