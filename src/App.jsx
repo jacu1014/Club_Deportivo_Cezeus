@@ -20,6 +20,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Función para obtener datos extendidos del usuario desde la tabla 'usuarios'
   const fetchUserData = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
@@ -41,9 +42,11 @@ function App() {
 
     const initApp = async () => {
       try {
-        // Obtenemos la sesión actual de forma asíncrona
-        const { data: { session } } = await supabase.auth.getSession();
+        // Intentamos recuperar la sesión persistente de Supabase
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) throw sessionError;
+
         if (session?.user && isMounted) {
           const dbUser = await fetchUserData(session.user.id);
           if (isMounted) {
@@ -57,7 +60,9 @@ function App() {
         }
       } catch (error) {
         console.error("Error crítico en initApp:", error.message);
+        if (isMounted) setUser(null);
       } finally {
+        // ESTO ES CLAVE: pase lo que pase, dejamos de mostrar la pantalla de carga
         if (isMounted) {
           setLoading(false);
         }
@@ -66,6 +71,7 @@ function App() {
 
     initApp();
 
+    // Escuchamos cambios de estado (Login, Logout, Token renovado)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
 
@@ -78,8 +84,10 @@ function App() {
           }
         }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setLoading(false);
+        if (isMounted) {
+          setUser(null);
+          setLoading(false);
+        }
       }
     });
 
@@ -89,13 +97,19 @@ function App() {
     };
   }, [fetchUserData]);
 
+  // Validación de permisos según el rol del usuario
   const canAccess = (page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page) || false;
   };
 
-  // 1. BLOQUEO DE SEGURIDAD: Mientras loading sea true, NO renderizamos el Router.
-  // Esto evita que las etiquetas <Navigate /> se ejecuten antes de tener al usuario.
+  // Función para determinar la ruta de inicio según el rol
+  const getHomeRoute = () => {
+    if (!user) return "/login";
+    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
+  };
+
+  // Pantalla de carga mientras se sincroniza la sesión
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -109,11 +123,6 @@ function App() {
       </div>
     );
   }
-
-  const getHomeRoute = () => {
-    if (!user) return "/login";
-    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
-  };
 
   return ( 
     <>
@@ -152,7 +161,7 @@ function App() {
             <MainLayout user={user}><PagosModule user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
 
-          {/* Fallbacks */}
+          {/* Fallbacks y Redirecciones Automáticas */}
           <Route path="/" element={<Navigate to={getHomeRoute()} replace />} />
           <Route path="*" element={<Navigate to={getHomeRoute()} replace />} />
         </Routes>
