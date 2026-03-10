@@ -20,7 +20,6 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // OPTIMIZACIÓN: Memoizamos la función para evitar recrearla en cada render
   const fetchUserData = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
@@ -40,66 +39,63 @@ function App() {
   useEffect(() => {
     let isMounted = true;
 
-    // Timeout de seguridad aumentado a 6s para conexiones lentas
-    const timeout = setTimeout(() => {
-      if (loading && isMounted) {
-        console.warn("⏱️ Tiempo de espera agotado. Forzando render...");
-        setLoading(false);
-      }
-    }, 6000);
-
     const initApp = async () => {
       try {
+        // Obtenemos la sesión actual de forma asíncrona
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user && isMounted) {
           const dbUser = await fetchUserData(session.user.id);
-          setUser(dbUser || { 
-            id: session.user.id, 
-            primer_nombre: 'Usuario', 
-            primer_apellido: 'Cezeus', 
-            rol: 'ALUMNO' 
-          });
+          if (isMounted) {
+            setUser(dbUser || { 
+              id: session.user.id, 
+              primer_nombre: 'Usuario', 
+              primer_apellido: 'Cezeus', 
+              rol: 'ALUMNO' 
+            });
+          }
         }
       } catch (error) {
         console.error("Error crítico en initApp:", error.message);
       } finally {
         if (isMounted) {
           setLoading(false);
-          clearTimeout(timeout);
         }
       }
     };
 
     initApp();
 
-    // Listener de cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session?.user) {
           const dbUser = await fetchUserData(session.user.id);
-          setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+          if (isMounted) {
+            setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+            setLoading(false);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
+        setLoading(false);
       }
-      
-      if (isMounted) setLoading(false);
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      clearTimeout(timeout);
     };
-  }, [fetchUserData]); // Agregamos la dependencia memoizada
+  }, [fetchUserData]);
 
   const canAccess = (page) => {
     if (!user) return false;
-    // Manejo seguro de roles inexistentes en ROLE_PERMISSIONS
     return ROLE_PERMISSIONS[user.rol]?.includes(page) || false;
   };
 
+  // 1. BLOQUEO DE SEGURIDAD: Mientras loading sea true, NO renderizamos el Router.
+  // Esto evita que las etiquetas <Navigate /> se ejecuten antes de tener al usuario.
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -108,7 +104,7 @@ function App() {
           <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-b-cyan-400/30 rounded-full animate-pulse"></div>
         </div>
         <p className="text-cyan-400 text-[9px] font-black uppercase tracking-[0.4em] mt-6 animate-pulse">
-          Cargando Sistema Cezeus
+          Sincronizando Cezeus
         </p>
       </div>
     );
@@ -127,7 +123,7 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to={getHomeRoute()} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Rutas Protegidas unificadas bajo validación de usuario */}
+          {/* Rutas Protegidas */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? (
             <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
           ) : <Navigate to="/login" replace />} />
