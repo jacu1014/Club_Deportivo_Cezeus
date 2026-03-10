@@ -106,7 +106,7 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Rutas Protegidas simplificadas */}
+          {/* Rutas Protegidas */}
           <Route path="/dashboard" element={
             <ProtectedRoute user={user} page={PaginasApp.DASHBOARD} canAccess={canAccess}>
               <DashboardPage user={user} />
@@ -133,7 +133,7 @@ function App() {
 
           <Route path="/calendario" element={
             <ProtectedRoute user={user} page={PaginasApp.CALENDARIO} canAccess={canAccess}>
-              <CalendarioPage userRol={user.rol} />
+              <CalendarioPage userRol={user?.rol} />
             </ProtectedRoute>
           } />
 
@@ -149,9 +149,28 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* Redirección inteligente */}
-          <Route path="/" element={<Navigate to={user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario"} replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Redirección inteligente corregida */}
+          <Route 
+            path="/" 
+            element={
+              user ? (
+                <Navigate to={user.rol === 'ALUMNO' ? "/alumnos" : "/calendario"} replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+          
+          <Route 
+            path="*" 
+            element={
+              user ? (
+                <Navigate to={user.rol === 'ALUMNO' ? "/alumnos" : "/calendario"} replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
         </Routes>
       </Router>
       <Analytics />
