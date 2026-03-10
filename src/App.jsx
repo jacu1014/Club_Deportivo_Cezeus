@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
@@ -16,155 +16,142 @@ import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
 
+// --- COMPONENTE DE RUTA PROTEGIDA ---
+const ProtectedRoute = ({ user, page, canAccess, children }) => {
+  if (!user) return <Navigate to="/login" replace />;
+  
+  if (!canAccess(page)) {
+    const fallback = user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+    return <Navigate to={fallback} replace />;
+  }
+
+  return <MainLayout user={user}>{children}</MainLayout>;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserData = useCallback(async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error("Error al obtener datos del usuario:", err);
-      return null;
-    }
-  }, []);
+  const canAccess = (page) => {
+    if (!user) return false;
+    return ROLE_PERMISSIONS[user.rol]?.includes(page);
+  };
 
   useEffect(() => {
-    let isMounted = true;
-
-    // RESCATE: Si en 4 segundos no ha sincronizado, forzamos el apagado del loader
-    const rescueTimeout = setTimeout(() => {
-      if (loading && isMounted) {
-        console.warn("Sincronización lenta: forzando visualización.");
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Carga lenta: forzando inicio...");
         setLoading(false);
       }
-    }, 4000);
+    }, 5000);
 
     const initApp = async () => {
       try {
-        // Al dar F5, esto busca el token en LocalStorage
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (sessionError) throw sessionError;
+        if (session?.user) {
+          const { data: dbUser } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
 
-        if (session?.user && isMounted) {
-          const dbUser = await fetchUserData(session.user.id);
-          if (isMounted) {
-            setUser(dbUser || { 
-              id: session.user.id, 
-              primer_nombre: 'Usuario', 
-              rol: 'ALUMNO' 
-            });
-          }
-        } else {
-          if (isMounted) setUser(null);
+          setUser(dbUser || { 
+            id: session.user.id, 
+            primer_nombre: 'Usuario', 
+            rol: 'ALUMNO' 
+          });
         }
       } catch (error) {
         console.error("Error en initApp:", error.message);
-        if (isMounted) setUser(null);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          clearTimeout(rescueTimeout);
-        }
+        setLoading(false);
+        clearTimeout(timeout);
       }
     };
 
     initApp();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        if (session?.user) {
-          const dbUser = await fetchUserData(session.user.id);
-          if (isMounted) {
-            setUser(dbUser || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
-            setLoading(false);
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
-        if (isMounted) {
-          setUser(null);
-          setLoading(false);
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
+          .then(({ data }) => {
+            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO' });
+          });
+      } else {
+        setUser(null);
       }
     });
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
-      clearTimeout(rescueTimeout);
+      clearTimeout(timeout);
     };
-  }, [fetchUserData]);
-
-  const canAccess = (page) => {
-    if (!user) return false;
-    return ROLE_PERMISSIONS[user.rol]?.includes(page) || false;
-  };
+  }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
-        <div className="relative">
-          <div className="w-12 h-12 border-4 border-cyan-400/10 border-t-cyan-400 rounded-full animate-spin"></div>
-        </div>
-        <p className="text-cyan-400 text-[9px] font-black uppercase tracking-[0.4em] mt-6 animate-pulse">
-          Sincronizando Cezeus
-        </p>
+        <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Iniciando Cezeus</p>
       </div>
     );
   }
 
-  const getHomeRoute = () => {
-    if (!user) return "/login";
-    return user.rol === 'ALUMNO' ? "/alumnos" : "/dashboard";
-  };
-
-  return ( 
+  return (
     <>
       <Router>
         <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to={getHomeRoute()} replace />} />
+          {/* Rutas Públicas */}
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? (
-            <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
-          ) : <Navigate to="/login" replace />} />
+          {/* Rutas Protegidas simplificadas */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute user={user} page={PaginasApp.DASHBOARD} canAccess={canAccess}>
+              <DashboardPage user={user} />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? (
-            <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout>
-          ) : <Navigate to={user ? "/dashboard" : "/login"} replace />} />
+          <Route path="/notificaciones" element={
+            <ProtectedRoute user={user} page={PaginasApp.NOTIFICACIONES} canAccess={canAccess}>
+              <NotificacionesPage user={user} />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? (
-            <MainLayout user={user}><Nosotros /></MainLayout>
-          ) : <Navigate to="/login" replace />} />
-          
-          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? (
-            <MainLayout user={user}><Alumnos /></MainLayout>
-          ) : <Navigate to={user ? "/calendario" : "/login"} replace />} />
+          <Route path="/nosotros" element={
+            <ProtectedRoute user={user} page={PaginasApp.NOSOTROS} canAccess={canAccess}>
+              <Nosotros />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? (
-            <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout>
-          ) : <Navigate to="/login" replace />} />
+          <Route path="/alumnos" element={
+            <ProtectedRoute user={user} page={PaginasApp.ALUMNOS} canAccess={canAccess}>
+              <Alumnos />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? (
-            <MainLayout user={user}><Configuracion user={user} /></MainLayout>
-          ) : <Navigate to="/login" replace />} />
+          <Route path="/calendario" element={
+            <ProtectedRoute user={user} page={PaginasApp.CALENDARIO} canAccess={canAccess}>
+              <CalendarioPage userRol={user.rol} />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? (
-            <MainLayout user={user}><PagosModule user={user} /></MainLayout>
-          ) : <Navigate to="/login" replace />} />
+          <Route path="/configuracion" element={
+            <ProtectedRoute user={user} page={PaginasApp.CONFIGURACION} canAccess={canAccess}>
+              <Configuracion user={user} />
+            </ProtectedRoute>
+          } />
 
-          <Route path="/" element={<Navigate to={getHomeRoute()} replace />} />
-          <Route path="*" element={<Navigate to={getHomeRoute()} replace />} />
+          <Route path="/pagos" element={
+            <ProtectedRoute user={user} page={PaginasApp.PAGOS} canAccess={canAccess}>
+              <PagosModule user={user} />
+            </ProtectedRoute>
+          } />
+
+          {/* Redirección inteligente */}
+          <Route path="/" element={<Navigate to={user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario"} replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
       <Analytics />
