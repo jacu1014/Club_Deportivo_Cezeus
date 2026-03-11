@@ -135,9 +135,9 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
   // --- CÁLCULOS ---
   const alumnos = (staff || []).filter(u => u.rol === RolUsuario.ALUMNO);
   const categoriasVisuales = [
-    { nombre: 'Iniciación', rango: '5-7 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("INICIACION")).length },
-    { nombre: 'Infantil', rango: '8-10 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("INFANTIL")).length },
-    { nombre: 'Transición', rango: '11-13 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("TRANSICION")).length },
+    { nombre: 'Iniciación', rango: '5-7 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("Iniciación")).length },
+    { nombre: 'Infantil', rango: '8-10 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("Infantil")).length },
+    { nombre: 'Transición', rango: '11-13 años', count: alumnos.filter(a => a.categoria?.toUpperCase().includes("Transición")).length },
   ];
 
   const valMensualidad = tarifas.find(t => t.categoria_asociada === 'Mensualidad' && t.nombre_tarifa === 'Mensualidad Base Full')?.valor || 0;

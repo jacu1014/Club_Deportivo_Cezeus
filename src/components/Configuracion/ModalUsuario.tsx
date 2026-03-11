@@ -124,7 +124,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         }
       }
 
-      setStatusText('Guardando en DB...');
+      setStatusText('Guardando...');
       const estadoSeleccionado = formData.get('estado')?.toString() || 'Activo';
       const rolSeleccionado = formData.get('rol')?.toString();
 
@@ -304,7 +304,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                     <span className="animate-spin h-4 w-4 border-2 border-black border-t-transparent rounded-full"></span>
                     {statusText}
                   </>
-                ) : usuarioAEditar ? "Actualizar Staff" : "Completar Registro Staff"}
+                ) : usuarioAEditar ? "Actualizar" : "Completar Registro"}
             </button>
           </div>
         </form>
