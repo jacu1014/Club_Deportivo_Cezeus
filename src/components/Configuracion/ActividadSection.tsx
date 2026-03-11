@@ -5,7 +5,7 @@ import { es } from 'date-fns/locale';
 
 interface LogActividad {
   id: string;
-  created_at: string;
+  fecha: string; // Cambiado de created_at a fecha
   accion: string;
   modulo: string;
   descripcion: string;
@@ -30,7 +30,7 @@ export const ActividadSection: React.FC = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('actividad') // Asegúrate que tu tabla se llame así
+        .from('actividad')
         .select(`
           *,
           usuarios:usuario_id (
@@ -40,7 +40,7 @@ export const ActividadSection: React.FC = () => {
             rol
           )
         `)
-        .order('created_at', { ascending: false })
+        .order('fecha', { ascending: false }) // Cambiado de created_at a fecha
         .limit(50);
 
       if (error) throw error;
@@ -53,15 +53,15 @@ export const ActividadSection: React.FC = () => {
   };
 
   const getAccionColor = (accion: string) => {
-    if (accion.includes('ELIMINAR') || accion.includes('BAJA')) return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
-    if (accion.includes('CREAR') || accion.includes('NUEVO')) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-    if (accion.includes('EXPORT') || accion.includes('VISUAL')) return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+    const act = accion.toUpperCase();
+    if (act.includes('ELIMINAR') || act.includes('BAJA')) return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
+    if (act.includes('CREAR') || act.includes('NUEVO')) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+    if (act.includes('EXPORT') || act.includes('VISUAL')) return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
     return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* HEADER DE LA SECCIÓN */}
       <div className="flex justify-between items-end">
         <div>
           <h3 className="text-white font-black uppercase italic tracking-tighter text-xl">
@@ -79,7 +79,6 @@ export const ActividadSection: React.FC = () => {
         </button>
       </div>
 
-      {/* CONTENEDOR DE LA TABLA */}
       <div className="bg-slate-950/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -101,7 +100,7 @@ export const ActividadSection: React.FC = () => {
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-20 text-center">
-                    <p className="text-slate-500 uppercase text-[10px] font-black tracking-widest">No hay registros de actividad aún</p>
+                    <p className="text-slate-500 uppercase text-[10px] font-black tracking-widest">No hay registros aún</p>
                   </td>
                 </tr>
               ) : (
@@ -137,10 +136,10 @@ export const ActividadSection: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <p className="text-white font-mono text-[10px]">
-                        {format(new Date(log.created_at), 'HH:mm:ss')}
+                        {format(new Date(log.fecha), 'HH:mm:ss')}
                       </p>
                       <p className="text-[9px] text-slate-500 uppercase">
-                        {format(new Date(log.created_at), 'dd MMM yyyy', { locale: es })}
+                        {format(new Date(log.fecha), 'dd MMM yyyy', { locale: es })}
                       </p>
                     </td>
                   </tr>
