@@ -31,12 +31,12 @@ export const ActividadSection: React.FC = () => {
     try {
       setLoading(true);
       
-      // Forzamos el uso de la relación fk_actividad_usuario para evitar el error de ambigüedad
+      // Consultamos usando la relación estándar que dejamos tras la limpieza nuclear
       const { data, error } = await supabase
         .from('actividad')
         .select(`
           *,
-          usuarios:usuario_id!fk_actividad_usuario (
+          usuarios:usuario_id (
             primer_nombre,
             primer_apellido,
             foto_url,
@@ -163,8 +163,8 @@ export const ActividadSection: React.FC = () => {
           <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-3xl p-6 space-y-4 shadow-2xl scale-in-center">
             <div className="flex justify-between items-center">
               <div>
-                <h4 className="text-white font-black uppercase italic tracking-tighter">Detalles Técnicos</h4>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedLog.modulo}</p>
+                <h4 className="text-white font-black uppercase italic tracking-tighter text-lg">Detalles Técnicos</h4>
+                <p className="text-[10px] text-primary uppercase font-bold tracking-widest">{selectedLog.modulo}</p>
               </div>
               <button 
                 onClick={() => setSelectedLog(null)} 
@@ -178,8 +178,8 @@ export const ActividadSection: React.FC = () => {
                 {JSON.stringify(selectedLog.detalles, null, 2)}
               </pre>
             </div>
-            <div className="p-3 bg-white/5 rounded-xl">
-               <p className="text-slate-300 text-xs italic">"{selectedLog.descripcion}"</p>
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+               <p className="text-slate-300 text-xs leading-relaxed italic">"{selectedLog.descripcion}"</p>
             </div>
           </div>
         </div>
