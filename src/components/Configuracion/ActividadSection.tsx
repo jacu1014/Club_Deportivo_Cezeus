@@ -30,15 +30,13 @@ export const ActividadSection: React.FC = () => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      // DEBUG: Verificamos si hay sesión activa
-      const { data: session } = await supabase.auth.getSession();
-      console.log("Sesión activa:", session);
-
+      
+      // Forzamos el uso de la relación fk_actividad_usuario para evitar el error de ambigüedad
       const { data, error } = await supabase
         .from('actividad')
         .select(`
           *,
-          usuarios:usuario_id (
+          usuarios:usuario_id!fk_actividad_usuario (
             primer_nombre,
             primer_apellido,
             foto_url,
@@ -49,11 +47,10 @@ export const ActividadSection: React.FC = () => {
         .limit(50);
 
       if (error) {
-        console.error("Error detallado de Supabase:", error.message, error.details, error.hint);
+        console.error("Error detallado de Supabase:", error.message);
         throw error;
       }
 
-      console.log("Datos recibidos de la tabla actividad:", data);
       setLogs(data || []);
     } catch (err) {
       console.error("Error al cargar logs:", err);
@@ -79,7 +76,10 @@ export const ActividadSection: React.FC = () => {
           </h3>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Auditoría en tiempo real</p>
         </div>
-        <button onClick={fetchLogs} className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-white transition-all">
+        <button 
+          onClick={fetchLogs} 
+          className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-white transition-all active:scale-90"
+        >
           <span className="material-symbols-outlined text-[20px]">refresh</span>
         </button>
       </div>
@@ -104,30 +104,50 @@ export const ActividadSection: React.FC = () => {
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-6 py-20 text-center text-slate-500 uppercase text-[10px] font-black tracking-widest">
-                    No hay registros (Revisa consola para errores de RLS)
+                    No se encontraron registros de actividad
                   </td>
                 </tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id} onClick={() => setSelectedLog(log)} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
+                  <tr 
+                    key={log.id} 
+                    onClick={() => setSelectedLog(log)} 
+                    className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center overflow-hidden">
-                          {log.usuarios?.foto_url ? <img src={log.usuarios.foto_url} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-slate-500 text-sm">person</span>}
+                          <img 
+                            src={log.usuarios?.foto_url || `https://ui-avatars.com/api/?name=${log.usuarios?.primer_nombre || 'S'}&background=random&color=fff`} 
+                            className="w-full h-full object-cover" 
+                            alt="Avatar"
+                          />
                         </div>
                         <div>
-                          <p className="text-white font-bold text-xs">{log.usuarios ? `${log.usuarios.primer_nombre} ${log.usuarios.primer_apellido}` : 'Sistema'}</p>
-                          <p className="text-[9px] text-slate-500 uppercase font-black">{log.usuarios?.rol || 'SISTEMA'}</p>
+                          <p className="text-white font-bold text-xs">
+                            {log.usuarios ? `${log.usuarios.primer_nombre} ${log.usuarios.primer_apellido}` : 'Sistema / Automático'}
+                          </p>
+                          <p className="text-[9px] text-slate-500 uppercase font-black tracking-tighter">
+                            {log.usuarios?.rol?.replace('_', ' ') || 'PROCESO'}
+                          </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-[9px] font-black border ${getAccionColor(log.accion)}`}>{log.accion}</span>
-                      <p className="text-slate-400 text-[10px] mt-1 line-clamp-1">{log.descripcion}</p>
+                      <span className={`px-2 py-1 rounded-md text-[9px] font-black border ${getAccionColor(log.accion)}`}>
+                        {log.accion}
+                      </span>
+                      <p className="text-slate-400 text-[10px] mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">
+                        {log.descripcion}
+                      </p>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className="text-white font-mono text-[10px]">{log.fecha ? format(new Date(log.fecha), 'HH:mm:ss') : '--'}</p>
-                      <p className="text-[9px] text-slate-500 uppercase">{log.fecha ? format(new Date(log.fecha), 'dd MMM yyyy', { locale: es }) : '--'}</p>
+                      <p className="text-white font-mono text-[10px]">
+                        {log.fecha ? format(new Date(log.fecha), 'HH:mm:ss') : '--:--:--'}
+                      </p>
+                      <p className="text-[9px] text-slate-500 uppercase">
+                        {log.fecha ? format(new Date(log.fecha), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}
+                      </p>
                     </td>
                   </tr>
                 ))
@@ -139,20 +159,28 @@ export const ActividadSection: React.FC = () => {
 
       {/* MODAL DE DETALLES */}
       {selectedLog && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-3xl p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-3xl p-6 space-y-4 shadow-2xl scale-in-center">
             <div className="flex justify-between items-center">
-              <h4 className="text-white font-black uppercase italic tracking-tighter">Detalles de Actividad</h4>
-              <button onClick={() => setSelectedLog(null)} className="text-slate-500 hover:text-white">
-                <span className="material-symbols-outlined">close</span>
+              <div>
+                <h4 className="text-white font-black uppercase italic tracking-tighter">Detalles Técnicos</h4>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedLog.modulo}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedLog(null)} 
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-500 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
             <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-              <pre className="text-primary font-mono text-[10px] overflow-auto max-h-60 custom-scrollbar">
+              <pre className="text-primary font-mono text-[11px] overflow-auto max-h-60 custom-scrollbar">
                 {JSON.stringify(selectedLog.detalles, null, 2)}
               </pre>
             </div>
-            <p className="text-slate-400 text-xs italic">"{selectedLog.descripcion}"</p>
+            <div className="p-3 bg-white/5 rounded-xl">
+               <p className="text-slate-300 text-xs italic">"{selectedLog.descripcion}"</p>
+            </div>
           </div>
         </div>
       )}
