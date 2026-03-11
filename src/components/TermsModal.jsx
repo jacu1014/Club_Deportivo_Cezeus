@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { registrarLog } from '../lib/activity'; // 1. Importamos tu función de log
 import LogoCezeus from '../components/Logo_Cezeus.jpeg';
 
 const TermsModal = ({ user, content, onAccepted }) => {
@@ -15,12 +16,26 @@ const TermsModal = ({ user, content, onAccepted }) => {
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase
+      // 2. Actualizamos el estado del usuario
+      const { error: updateError } = await supabase
         .from('usuarios')
         .update({ acepta_terminos: true })
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // 3. Registramos la actividad en la tabla 'actividad'
+      await registrarLog({
+        accion: 'ACEPTACION_TERMINOS',
+        descripcion: `Consentimiento firmado por el acudiente de ${user.primer_nombre} ${user.primer_apellido}`,
+        modulo: 'LEGAL',
+        detalles: { 
+          version: '2026.1',
+          plataforma: 'Web App',
+          usuario_rol: user.rol 
+        }
+      });
+
       onAccepted();
     } catch (err) {
       console.error("Error al firmar el consentimiento:", err.message);
@@ -65,9 +80,6 @@ const TermsModal = ({ user, content, onAccepted }) => {
             <p className="font-bold text-gray-100 mb-4 border-l-2 border-cyan-500 pl-3">
               Estimado acudiente de {user.primer_nombre} {user.primer_apellido}:
             </p>
-            {/* CORRECCIÓN: Se usa whitespace-pre-wrap y se reemplazan las cadenas 
-                literales '\n' por saltos de línea reales para asegurar el formato.
-            */}
             <div className="whitespace-pre-wrap font-light text-justify">
               {content?.split('\\n').join('\n')}
             </div>

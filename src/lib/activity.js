@@ -2,29 +2,39 @@ import { supabase } from './supabaseClient';
 
 /**
  * Registra una actividad en la tabla 'actividad'
- * @param {string} accion - Ejemplo: 'REGISTRO', 'ELIMINACION', 'ACTUALIZACION'
- * @param {string} descripcion - Texto descriptivo de la acción
- * @param {string} modulo - Módulo donde ocurre (ej: 'ALUMNOS', 'PAGOS')
- * @param {object} detalles - Objeto con datos adicionales (se guardará como JSONB)
+ * @param {Object} params - Parámetros del log
  */
-export const registrarLog = async (accion, descripcion, modulo = 'SISTEMA', detalles = {}) => {
+export const registrarLog = async ({ 
+  accion, 
+  descripcion, 
+  modulo = 'SISTEMA', 
+  detalles = {}, 
+  usuarioId = null 
+}) => {
   try {
-    // 1. Obtener la sesión actual para saber quién hace la acción
-    const { data: { user } } = await supabase.auth.getUser();
+    let finalUserId = usuarioId;
 
-    if (!user) {
-      console.warn("⚠️ No se pudo registrar el log: No hay usuario autenticado.");
+    // 1. Si no se provee un ID, intentamos obtener el de la sesión actual
+    if (!finalUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        finalUserId = user.id;
+      }
+    }
+
+    if (!finalUserId) {
+      console.warn("⚠️ No se pudo registrar el log: No hay identificador de usuario.");
       return;
     }
 
-    // 2. Insertar en la tabla 'actividad'
+    // 2. Insertar en la tabla 'actividad' con las columnas exactas de tu DB
     const { error } = await supabase.from('actividad').insert([
       {
-        usuario_id: user.id,
+        usuario_id: finalUserId,
         accion: accion.toUpperCase(),
         descripcion: descripcion,
         modulo: modulo.toUpperCase(),
-        detalles: detalles, // Supabase maneja el objeto JS como JSONB automáticamente
+        detalles: detalles, 
         fecha: new Date().toISOString()
       }
     ]);

@@ -23,8 +23,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fechaNacimiento, setFechaNacimiento] = useState('');
-  
-  // --- NUEVO ESTADO PARA VISIBILIDAD DE CONTRASEÑA ---
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -35,7 +33,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       } else {
         setFechaNacimiento('');
         setFotoPreview(null);
-        setShowPassword(false); // Reset al abrir nuevo
+        setShowPassword(false);
       }
     }
   }, [isOpen, usuarioAEditar]);
@@ -128,10 +126,11 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
 
       setStatusText('Guardando en DB...');
       const estadoSeleccionado = formData.get('estado')?.toString() || 'Activo';
+      const rolSeleccionado = formData.get('rol')?.toString();
 
       const payload = {
         id: authUserId,
-        rol: formData.get('rol'),
+        rol: rolSeleccionado,
         estado: estadoSeleccionado,
         email: email,
         primer_nombre: formData.get('primer_nombre')?.toString().toUpperCase(),
@@ -156,11 +155,17 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
 
       if (dbError) throw dbError;
 
-      registrarLog(
-        usuarioAEditar ? 'ACTUALIZACION' : 'REGISTRO', 
-        `Staff: ${payload.primer_nombre} - ${payload.rol}`, 
-        'NOMINA'
-      );
+      // --- LOG ACTUALIZADO ---
+      await registrarLog({
+        accion: usuarioAEditar ? 'ACTUALIZACION_STAFF' : 'REGISTRO_STAFF',
+        modulo: 'NOMINA',
+        descripcion: `${usuarioAEditar ? 'Actualización' : 'Registro'} de personal: ${payload.primer_nombre} ${payload.primer_apellido}`,
+        detalles: { 
+          rol: rolSeleccionado, 
+          estado: estadoSeleccionado,
+          documento: numDoc
+        }
+      });
 
       mostrarMensaje("✨ Proceso completado exitosamente", "success");
       
@@ -208,7 +213,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         </div>
 
         <form onSubmit={ejecutarProcesoStaff} className="p-8 grid grid-cols-1 xl:grid-cols-12 gap-8">
-          
           <div className="xl:col-span-4 space-y-6">
             <section className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-6 text-center">
                 <div 
@@ -235,7 +239,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                 <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] italic text-primary">Acceso</h3>
                 <Input name="email" type="email" label="Correo Institucional" defaultValue={usuarioAEditar?.email} required disabled={!!usuarioAEditar} />
                 
-                {/* --- CAMPO DE CONTRASEÑA ACTUALIZADO --- */}
                 {!usuarioAEditar && (
                   <Input 
                     name="password" 
@@ -310,7 +313,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   );
 };
 
-// --- COMPONENTES AUXILIARES ACTUALIZADOS CON SOPORTE PARA ICONO ---
 const Input = ({ label, name, type = "text", required, defaultValue, disabled, isPassword, showPassword, togglePassword }: any) => (
   <div className="flex flex-col gap-1">
     <label className="text-[9px] text-slate-500 font-bold uppercase ml-1 tracking-widest">{label}</label>

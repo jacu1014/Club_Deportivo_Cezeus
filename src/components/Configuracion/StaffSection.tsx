@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Usuario, RolUsuario } from '../../types';
 import { generarReporteCEZEUS } from '../../services/reportePDFService';
+import { registrarLog } from '../../lib/activity';
 // IMPORTACIÓN DEL COMPONENTE DE CARNET
 import VistaCarnet from '../VistaCarnet'; 
 
@@ -70,6 +71,14 @@ export const StaffSection: React.FC<StaffSectionProps> = ({
     }));
 
     generarReporteCEZEUS("Listado Oficial de Personal Staff", datosMapeados, columnasStaff);
+
+    // LOG DE AUDITORÍA
+    await registrarLog({
+    accion: 'EXPORTACION_PDF',
+    modulo: 'NOMINA',
+    descripcion: `Se exportó el listado de staff (${staffFiltrado.length} registros)`,
+    detalles: { filtro_rol: rolFiltro }
+    });
   };
 
   const rolesFiltro = ['TODOS', RolUsuario.SUPER_ADMIN, RolUsuario.DIRECTOR, RolUsuario.ADMINISTRATIVO, RolUsuario.ENTRENADOR];
@@ -232,28 +241,81 @@ export const StaffSection: React.FC<StaffSectionProps> = ({
 
                     <td className="px-8 py-6 text-right">
                       <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
-                        
                         <button 
-                          onClick={() => setSelectedStaffForCard(u)} 
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-emerald-500 transition-all"
-                          title="Visualizar Carnet"
-                        >
-                          <span className="material-symbols-outlined text-[20px]">badge</span>
-                        </button>
+                        onClick={async () => {
+                          // 1. Abrimos el carnet en la interfaz
+                          setSelectedStaffForCard(u);
+
+                          // 2. Registramos el movimiento en los logs
+                          await registrarLog({
+                            accion: 'VISUALIZACION_CARNET',
+                            modulo: 'STAFF',
+                            descripcion: `Se consultó el carnet digital de: ${u.primer_nombre} ${u.primer_apellido}`,
+                            detalles: { 
+                              target_uid: u.id, 
+                              documento: u.numero_documento,
+                              rol_consultado: u.rol 
+                            }
+                          });
+                        }} 
+                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-emerald-500 transition-all"
+                        title="Visualizar Carnet"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">badge</span>
+                      </button>
 
                         {currentUserRole === RolUsuario.SUPER_ADMIN && (
-                          <>
-                            <button onClick={() => onResetPass(u.email)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-amber-500 transition-all">
-                              <span className="material-symbols-outlined text-[20px]">key</span>
-                            </button>
-                            <button onClick={() => onDelete(u.id, u.primer_nombre)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-red-500 transition-all">
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
-                          </>
-                        )}
-                        <button onClick={() => onEdit(u)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-primary transition-all">
-                          <span className="material-symbols-outlined text-[20px]">edit_note</span>
-                        </button>
+                        <>
+                          {/* BOTÓN: RESETEAR CONTRASEÑA */}
+                          <button 
+                            onClick={async () => {
+                              // Ejecutamos la acción principal
+                              onResetPass(u.email);
+                              // Registramos el log de auditoría
+                              await registrarLog({
+                                accion: 'RESET_PASSWORD_ADMIN',
+                                modulo: 'SEGURIDAD',
+                                descripcion: `ADMIN solicitó restablecimiento de clave para: ${u.primer_nombre} ${u.primer_apellido}`,
+                                detalles: { target_email: u.email, target_uid: u.id }
+                              });
+                            }} 
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-amber-500 transition-all"
+                            title="Resetear Clave"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">key</span>
+                          </button>
+
+                          {/* BOTÓN: ELIMINAR INTEGRANTE */}
+                          <button 
+                            onClick={async () => {
+                              if (window.confirm(`¿Estás seguro de eliminar a ${u.primer_nombre}? Esta acción no se puede deshacer.`)) {
+                                // Ejecutamos la acción de eliminación
+                                onDelete(u.id, u.primer_nombre);
+                                // Registramos el log antes de que el componente se desmonte o refresque
+                                await registrarLog({
+                                  accion: 'ELIMINACION_STAFF',
+                                  modulo: 'NOMINA',
+                                  descripcion: `Se eliminó al integrante: ${u.primer_nombre} ${u.primer_apellido}`,
+                                  detalles: { doc: u.numero_documento, rol_previo: u.rol }
+                                });
+                              }
+                            }} 
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-red-500 transition-all"
+                            title="Eliminar del Sistema"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* BOTÓN: EDITAR PERFIL (LOG SE MANEJA DENTRO DEL MODAL) */}
+                      <button 
+                        onClick={() => onEdit(u)} 
+                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 text-slate-400 hover:text-primary transition-all"
+                        title="Editar Información"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">edit_note</span>
+                      </button>
                       </div>
                     </td>
                   </tr>

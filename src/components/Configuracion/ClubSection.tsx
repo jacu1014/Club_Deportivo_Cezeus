@@ -3,6 +3,7 @@ import { ConfigInput } from './ConfigUI';
 import { Usuario, RolUsuario } from '../../types';
 import { supabase } from '../../lib/supabaseClient';
 import { CATEGORIAS_FINANZAS } from '../../constants/data';
+import { registrarLog } from '../../lib/activity'; // Importamos el logger
 
 interface ClubSectionProps {
   staff?: Usuario[];
@@ -14,7 +15,6 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
   
   const [tarifas, setTarifas] = useState<any[]>([]);
   const [proveedores, setProveedores] = useState<any[]>([]);
-  // Estado para la búsqueda
   const [searchTerm, setSearchTerm] = useState('');
   
   const [nuevoProveedor, setNuevoProveedor] = useState({
@@ -55,6 +55,15 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
         supabase.from('configuraciones_club').update({ valor: t.valor }).eq('id', t.id)
       );
       await Promise.all(updates);
+
+      // LOG: Registro de actualización de tarifas
+      await registrarLog({
+        accion: 'ACTUALIZACION_TARIFAS',
+        descripcion: 'Se actualizaron los valores de las tarifas globales del club',
+        modulo: 'CONFIGURACION',
+        detalles: { tarifas_actualizadas: tarifas.map(t => ({ nombre: t.nombre_tarifa, valor: t.valor })) }
+      });
+
       alert("Tarifas actualizadas correctamente.");
     } catch (error: any) {
       alert("Error al guardar: " + error.message);
@@ -84,6 +93,15 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
       }]);
 
       if (error) throw error;
+
+      // LOG: Nuevo proveedor
+      await registrarLog({
+        accion: 'REGISTRO_PROVEEDOR',
+        descripcion: `Se registró al proveedor: ${nuevoProveedor.nombre_proveedor.toUpperCase()}`,
+        modulo: 'DIRECTORIO',
+        detalles: { nit: nuevoProveedor.nit_cc, categoria: nuevoProveedor.categoria_servicio }
+      });
+
       setNuevoProveedor({ nombre_proveedor: '', nit_cc: '', telefono: '', categoria_servicio: '' });
       fetchData();
     } catch (error: any) { alert(error.message); } finally { setSaving(false); }
@@ -92,7 +110,17 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
   const eliminarProveedor = async (id: string, nombre: string) => {
     if (!window.confirm(`¿Eliminar a ${nombre}?`)) return;
     try {
-      await supabase.from('proveedores').delete().eq('id', id);
+      const { error } = await supabase.from('proveedores').delete().eq('id', id);
+      if (error) throw error;
+
+      // LOG: Eliminación
+      await registrarLog({
+        accion: 'ELIMINACION_PROVEEDOR',
+        descripcion: `Se eliminó al proveedor: ${nombre}`,
+        modulo: 'DIRECTORIO',
+        detalles: { id_eliminado: id }
+      });
+
       setProveedores(proveedores.filter(p => p.id !== id));
     } catch (error: any) { alert(error.message); }
   };
@@ -157,44 +185,40 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
         </div>
 
         {/* DERECHA: TARIFAS */}
-   {/* DERECHA: TARIFAS */}
-    <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
-      <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
-        <span className="material-symbols-outlined text-primary">payments</span> Tarifas Globales
-      </h3>
-      
-      <div className="space-y-4">
-        {tarifas.length > 0 ? tarifas.map((t) => (
-          <div key={t.id} className="relative group">
-            {/* Signo de pesos ajustado: pointer-events-none es vital */}
-            <span className="absolute left-4 bottom-[13px] text-primary font-black text-[11px] z-20 pointer-events-none">
-              $
-            </span>
+        <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
+          <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">payments</span> Tarifas Globales
+          </h3>
+          
+          <div className="space-y-4">
+            {tarifas.length > 0 ? tarifas.map((t) => (
+              <div key={t.id} className="relative group">
+                <span className="absolute left-4 bottom-[13px] text-primary font-black text-[11px] z-20 pointer-events-none">
+                  $
+                </span>
+                
+                <ConfigInput 
+                  label={t.nombre_tarifa} 
+                  value={t.valor.toString()} 
+                  onChange={(val) => handleUpdateTarifa(t.id, Number(val))}
+                  className="!pl-9" 
+                />
+              </div>
+            )) : (
+              <p className="text-[10px] text-slate-500 uppercase font-black text-center py-4">
+                No hay tarifas en DB
+              </p>
+            )}
             
-            <ConfigInput 
-              label={t.nombre_tarifa} 
-              value={t.valor.toString()} 
-              onChange={(val) => handleUpdateTarifa(t.id, Number(val))}
-              // IMPORTANTE: pl-9 (padding-left) empuja el texto para que no choque con el $
-              // ! importante asegura que sobreescriba estilos internos
-              className="!pl-9" 
-            />
+            <button 
+              onClick={handleGuardarTarifas}
+              disabled={saving}
+              className="w-full bg-primary text-black py-4 rounded-xl text-[10px] font-black uppercase hover:bg-white transition-all active:scale-95 disabled:opacity-50 mt-2"
+            >
+              {saving ? 'Guardando...' : 'GUARDAR Y ACTUALIZAR'}
+            </button>
           </div>
-        )) : (
-          <p className="text-[10px] text-slate-500 uppercase font-black text-center py-4">
-            No hay tarifas en DB
-          </p>
-        )}
-        
-        <button 
-          onClick={handleGuardarTarifas}
-          disabled={saving}
-          className="w-full bg-primary text-black py-4 rounded-xl text-[10px] font-black uppercase hover:bg-white transition-all active:scale-95 disabled:opacity-50 mt-2"
-        >
-          {saving ? 'Guardando...' : 'GUARDAR Y ACTUALIZAR'}
-        </button>
-      </div>
-    </div>
+        </div>
 
         {/* FULL WIDTH / ABAJO: PROVEEDORES */}
         <div className="lg:col-span-2 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6">
@@ -203,7 +227,6 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
               <span className="material-symbols-outlined text-purple-400">local_shipping</span> Directorio de Proveedores
             </h3>
             
-            {/* BARRA DE BÚSQUEDA */}
             <div className="relative group">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm group-focus-within:text-purple-400 transition-colors">search</span>
               <input 
