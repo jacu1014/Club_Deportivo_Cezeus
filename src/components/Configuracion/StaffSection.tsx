@@ -47,39 +47,45 @@ export const StaffSection: React.FC<StaffSectionProps> = ({
     return staffSinAlumnos.filter(u => u.rol === rol).length;
   };
 
-  const handleExportarPDF = () => {
-    const columnasStaff = [
-      { header: 'DOCUMENTO', dataKey: 'doc' },
-      { header: 'NOMBRE COMPLETO', dataKey: 'nombre' },
-      { header: 'ROL', dataKey: 'rol' },
-      { header: 'CONTACTO', dataKey: 'tel' },
-      { header: 'EMAIL', dataKey: 'email' },
-      { header: 'EPS', dataKey: 'eps' },
-      { header: 'RH', dataKey: 'rh' },
-      { header: 'ESTADO', dataKey: 'estado' }
-    ];
+  // 1. Añadimos el prefijo 'async' aquí
+const handleExportarPDF = async () => {
+  const columnasStaff = [
+    { header: 'DOCUMENTO', dataKey: 'doc' },
+    { header: 'NOMBRE COMPLETO', dataKey: 'nombre' },
+    { header: 'ROL', dataKey: 'rol' },
+    { header: 'CONTACTO', dataKey: 'tel' },
+    { header: 'EMAIL', dataKey: 'email' },
+    { header: 'EPS', dataKey: 'eps' },
+    { header: 'RH', dataKey: 'rh' },
+    { header: 'ESTADO', dataKey: 'estado' }
+  ];
 
-    const datosMapeados = staffFiltrado.map(u => ({
-      doc: `${u.tipo_documento || 'CC'}: ${u.numero_documento}`,
-      nombre: `${u.primer_nombre} ${u.segundo_nombre || ''} ${u.primer_apellido} ${u.segundo_apellido || ''}`.trim().toUpperCase(),
-      rol: (u.rol || '').replace('_', ' '),
-      tel: u.telefono || 'N/A', 
-      email: u.email || 'N/A',
-      eps: u.eps || 'POR ASIGNAR',
-      rh: `${u.grupo_sanguineo || ''}${u.factor_rh || ''}` || 'N/A',
-      estado: (u.estado || 'INACTIVO').toUpperCase()
-    }));
+  const datosMapeados = staffFiltrado.map(u => ({
+    doc: `${u.tipo_documento || 'CC'}: ${u.numero_documento}`,
+    nombre: `${u.primer_nombre} ${u.segundo_nombre || ''} ${u.primer_apellido} ${u.segundo_apellido || ''}`.trim().toUpperCase(),
+    rol: (u.rol || '').replace('_', ' '),
+    tel: u.telefono || 'N/A', 
+    email: u.email || 'N/A',
+    eps: u.eps || 'POR ASIGNAR',
+    rh: `${u.grupo_sanguineo || ''}${u.factor_rh || ''}` || 'N/A',
+    estado: (u.estado || 'INACTIVO').toUpperCase()
+  }));
 
+  try {
+    // 2. Ejecutamos la generación del PDF
     generarReporteCEZEUS("Listado Oficial de Personal Staff", datosMapeados, columnasStaff);
 
-    // LOG DE AUDITORÍA
+    // 3. Ahora el await funcionará correctamente
     await registrarLog({
-    accion: 'EXPORTACION_PDF',
-    modulo: 'NOMINA',
-    descripcion: `Se exportó el listado de staff (${staffFiltrado.length} registros)`,
-    detalles: { filtro_rol: rolFiltro }
+      accion: 'EXPORTACION_PDF',
+      modulo: 'NOMINA',
+      descripcion: `Se exportó el listado de staff (${staffFiltrado.length} registros)`,
+      detalles: { filtro_rol: rolFiltro }
     });
-  };
+  } catch (error) {
+    console.error("Error al registrar el log de exportación:", error);
+  }
+};
 
   const rolesFiltro = ['TODOS', RolUsuario.SUPER_ADMIN, RolUsuario.DIRECTOR, RolUsuario.ADMINISTRATIVO, RolUsuario.ENTRENADOR];
 
