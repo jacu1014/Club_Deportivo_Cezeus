@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// Importamos el logo desde la ruta que indicaste
 import LogoCezeus from '../components/Logo_Cezeus.jpeg';
 
 const TermsModal = ({ user, content, onAccepted }) => {
@@ -10,7 +9,6 @@ const TermsModal = ({ user, content, onAccepted }) => {
 
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Habilitar cuando el usuario llegue al final (margen de 50px)
     if (scrollHeight - scrollTop <= clientHeight + 50) setHasScrolled(true);
   };
 
@@ -59,7 +57,6 @@ const TermsModal = ({ user, content, onAccepted }) => {
           onScroll={handleScroll}
           className="p-8 overflow-y-auto text-gray-300 text-sm leading-relaxed space-y-6 custom-scrollbar bg-black/10 relative"
         >
-          {/* Marca de agua opcional (Logo de fondo muy tenue) */}
           <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
              <img src={LogoCezeus} alt="" className="w-64 h-64 grayscale" />
           </div>
@@ -68,8 +65,11 @@ const TermsModal = ({ user, content, onAccepted }) => {
             <p className="font-bold text-gray-100 mb-4 border-l-2 border-cyan-500 pl-3">
               Estimado acudiente de {user.primer_nombre} {user.primer_apellido}:
             </p>
+            {/* CORRECCIÓN: Se usa whitespace-pre-wrap y se reemplazan las cadenas 
+                literales '\n' por saltos de línea reales para asegurar el formato.
+            */}
             <div className="whitespace-pre-wrap font-light text-justify">
-              {content}
+              {content?.split('\\n').join('\n')}
             </div>
           </div>
         </div>
