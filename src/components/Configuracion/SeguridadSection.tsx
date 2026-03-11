@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase'; // Asegúrate de tener la ruta correcta
+import { supabase } from '../../lib/supabaseClient'; // Asegúrate de tener la ruta correcta
 import { registrarLog } from '../../lib/activity';
 
 export const SeguridadSection: React.FC = () => {
