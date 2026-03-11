@@ -3,11 +3,12 @@ import { User, Usuario } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
 
-// --- IMPORTANTE: Usar llaves { } si en el archivo usaste "export const" ---
+// --- COMPONENTES ---
 import { PerfilSection } from '../components/Configuracion/PerfilSection';
 import { StaffSection } from '../components/Configuracion/StaffSection';
 import { ClubSection } from '../components/Configuracion/ClubSection';
 import { SeguridadSection } from '../components/Configuracion/SeguridadSection';
+import { ActividadSection } from '../components/Configuracion/ActividadSection'; // NUEVO IMPORT
 import { TabButton } from '../components/Configuracion/ConfigUI';
 import { ModalUsuario } from '../components/Configuracion/ModalUsuario';
 
@@ -16,7 +17,8 @@ interface ConfiguracionProps {
 }
 
 const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'perfil' | 'club' | 'staff' | 'seguridad'>('perfil');
+  // 1. Actualizamos el tipo de activeTab para incluir 'actividad'
+  const [activeTab, setActiveTab] = useState<'perfil' | 'club' | 'staff' | 'seguridad' | 'actividad'>('perfil');
   const [staff, setStaff] = useState<Usuario[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   
@@ -26,11 +28,13 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
   const currentRole = user?.rol || '';
   const canManageClub = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
   const canSeeStaff = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(currentRole);
+  
+  // 2. Definimos permiso para ver logs de actividad
+  const canSeeActivity = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
 
   const fetchStaff = async () => {
     try {
       setLoadingStaff(true);
-      // Traemos todos para que ClubSection cuente alumnos y staff correctamente
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
@@ -46,7 +50,6 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
   };
 
   useEffect(() => {
-    // Carga datos si se entra a Staff o a Club para que las estadísticas estén vivas
     if ((activeTab === 'staff' && canSeeStaff) || (activeTab === 'club' && canManageClub)) {
       fetchStaff();
     }
@@ -116,6 +119,12 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
         {canManageClub && (
           <TabButton active={activeTab === 'club'} onClick={() => setActiveTab('club')} icon="stadium" label="Gestión Club" />
         )}
+        
+        {/* 3. Agregamos el botón de la nueva pestaña si tiene permiso */}
+        {canSeeActivity && (
+          <TabButton active={activeTab === 'actividad'} onClick={() => setActiveTab('actividad')} icon="history" label="Actividad" />
+        )}
+
         <TabButton active={activeTab === 'seguridad'} onClick={() => setActiveTab('seguridad')} icon="lock" label="Seguridad" />
       </div>
 
@@ -146,9 +155,13 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
           </div>
         )}
 
-        {/* --- CLUB SECTION --- */}
         {activeTab === 'club' && canManageClub && (
           <ClubSection staff={staff} />
+        )}
+
+        {/* 4. Renderizamos la nueva sección de Actividad */}
+        {activeTab === 'actividad' && canSeeActivity && (
+          <ActividadSection />
         )}
 
         {activeTab === 'seguridad' && <SeguridadSection />}
