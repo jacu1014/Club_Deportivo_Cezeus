@@ -21,10 +21,6 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState('');
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Referencia para evitar reseteos de rol accidentales
   const isUserLoaded = useRef(false);
 
   const canAccess = useCallback((page) => {
@@ -32,6 +28,7 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
+  // Carga de texto legal
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -50,7 +47,6 @@ function App() {
 
   useEffect(() => {
     let isMounted = true;
-    let timeoutId;
 
     const fetchUserProfile = async (userId) => {
       try {
@@ -59,7 +55,6 @@ function App() {
           .select('*')
           .eq('id', userId)
           .maybeSingle();
-
         if (error) throw error;
         return data;
       } catch (e) {
@@ -73,6 +68,7 @@ function App() {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
+          setLoading(false);
         }
         return;
       }
@@ -80,7 +76,7 @@ function App() {
       const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
       if (isUserLoaded.current && !forceRefresh) {
-        if (user?.rol !== roleFromToken) {
+        if (user?.rol !== roleFromToken && isMounted) {
           setUser(prev => ({ ...prev, rol: roleFromToken }));
         }
         return;
@@ -98,42 +94,36 @@ function App() {
 
         setUser(finalUser);
         isUserLoaded.current = true;
+        setLoading(false);
       }
     };
 
     const initApp = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        await updateUserData(session, true);
+        if (session) {
+          await updateUserData(session, true);
+        } else {
+          if (isMounted) setLoading(false);
+        }
       } catch (error) {
         console.error("Error init:", error.message);
-        setError("Error al cargar la sesión. Por favor, inténtalo de nuevo.");
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setInitialLoadComplete(true);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-
-    // Establece un tiempo de espera máximo de 10 segundos para la carga inicial
-    timeoutId = setTimeout(() => {
-      if (isMounted && !initialLoadComplete) {
-        setLoading(false);
-        setError("La carga inicial está tardando demasiado. Por favor, recarga la página.");
-      }
-    }, 10000);
 
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'INITIAL_SESSION' && !session) {
+        if (isMounted) setLoading(false);
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await updateUserData(session, event === 'SIGNED_IN');
-      }
-      if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
+          setLoading(false);
         }
       }
     });
@@ -149,31 +139,16 @@ function App() {
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
-  if (loading || !initialLoadComplete) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sesión</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
-        <p className="text-red-500 text-lg font-bold">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-cyan-400 text-[#05080d] rounded hover:bg-cyan-500"
-        >
-          Recargar
-        </button>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sistema</p>
       </div>
     );
   }
@@ -186,13 +161,14 @@ function App() {
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? <MainLayout user={user}><Alumnos /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to="/login" />} />
-          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to="/login" />} />
+          {/* Rutas Protegidas */}
+          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? <MainLayout user={user}><Alumnos /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
