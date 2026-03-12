@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
-
 // Layouts y Páginas
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
@@ -15,44 +14,36 @@ import CalendarioPage from './pages/CalendarioPage';
 import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
-
 // Componentes adicionales
 import TermsModal from './components/TermsModal';
 
 function App() {
-  // 1. HIDRATACIÓN INMEDIATA: Leemos el localStorage antes del primer render
+  // 1. INTENTO DE CARGA INSTANTÁNEA (Pre-hidratación)
   const [user, setUser] = useState(() => {
-    try {
-      // Buscamos la sesión que Supabase guarda automáticamente
-      const storageKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
-      const savedSession = storageKey ? JSON.parse(localStorage.getItem(storageKey)) : null;
-
-      if (savedSession?.user) {
-        const u = savedSession.user;
-        return {
-          id: u.id,
-          primer_nombre: u.user_metadata?.first_name || 'Usuario',
-          rol: u.user_metadata?.rol || 'ALUMNO',
-          acepta_terminos: u.user_metadata?.acepta_terminos ?? true,
-          ...u
-        };
-      }
-    } catch (e) {
-      console.error("Error en hidratación inicial:", e);
+    const sessionKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
+    if (sessionKey) {
+      try {
+        const session = JSON.parse(localStorage.getItem(sessionKey));
+        return session?.user ? { 
+          ...session.user, 
+          rol: session.user.user_metadata?.rol || 'ALUMNO',
+          primer_nombre: session.user.user_metadata?.first_name || 'Usuario'
+        } : null;
+      } catch { return null; }
     }
     return null;
   });
 
-  // Si ya tenemos usuario desde el localStorage, empezamos sin loading
-  const [loading, setLoading] = useState(!user);
+  const [loading, setLoading] = useState(!user); // Si hay usuario en cache, no mostramos loader inicial
   const [legalText, setLegalText] = useState('');
-  const isUserLoaded = useRef(!!user);
+  const isUserLoaded = useRef(false);
 
   const canAccess = useCallback((page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
+  // Carga de texto legal
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -82,6 +73,7 @@ function App() {
         if (error) throw error;
         return data;
       } catch (e) {
+        console.error("Error recuperando perfil de DB:", e.message);
         return null;
       }
     };
@@ -98,7 +90,6 @@ function App() {
 
       const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
-      // Si ya hay usuario y no es login forzado, solo validamos cambios de rol
       if (isUserLoaded.current && !forceRefresh) {
         if (user?.rol !== roleFromToken && isMounted) {
           setUser(prev => ({ ...prev, rol: roleFromToken }));
@@ -107,7 +98,6 @@ function App() {
         return;
       }
 
-      // Enriquecemos con datos de la DB
       const profile = await fetchUserProfile(session.user.id);
 
       if (isMounted) {
@@ -128,7 +118,7 @@ function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          await updateUserData(session, false); // false para no resetear lo que ya hidratamos
+          await updateUserData(session, false);
         } else {
           if (isMounted) setLoading(false);
         }
@@ -140,16 +130,13 @@ function App() {
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
         await updateUserData(session, event === 'SIGNED_IN');
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
         if (isMounted) {
-          setUser(null);
-          isUserLoaded.current = false;
+          if (event === 'SIGNED_OUT') setUser(null);
           setLoading(false);
         }
-      } else if (event === 'INITIAL_SESSION' && !session) {
-        if (isMounted) setLoading(false);
       }
     });
 
@@ -159,7 +146,8 @@ function App() {
     };
   }, []);
 
-  // Bloqueo de render solo si realmente no sabemos si hay usuario
+  // 2. PROTECCIÓN CONTRA CONGELAMIENTO
+  // Solo bloqueamos la pantalla si NO tenemos ni usuario en cache ni respuesta de sesión.
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -178,6 +166,7 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
+          {/* Rutas Protegidas - Lógica mejorada para evitar expulsión por delay */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
@@ -190,7 +179,6 @@ function App() {
           <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
-
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal
           user={user}
