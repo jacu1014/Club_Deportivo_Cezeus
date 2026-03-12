@@ -20,17 +20,39 @@ import NotificacionesPage from './pages/NotificacionesPage';
 import TermsModal from './components/TermsModal';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // 1. HIDRATACIÓN INMEDIATA: Leemos el localStorage antes del primer render
+  const [user, setUser] = useState(() => {
+    try {
+      // Buscamos la sesión que Supabase guarda automáticamente
+      const storageKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
+      const savedSession = storageKey ? JSON.parse(localStorage.getItem(storageKey)) : null;
+
+      if (savedSession?.user) {
+        const u = savedSession.user;
+        return {
+          id: u.id,
+          primer_nombre: u.user_metadata?.first_name || 'Usuario',
+          rol: u.user_metadata?.rol || 'ALUMNO',
+          acepta_terminos: u.user_metadata?.acepta_terminos ?? true,
+          ...u
+        };
+      }
+    } catch (e) {
+      console.error("Error en hidratación inicial:", e);
+    }
+    return null;
+  });
+
+  // Si ya tenemos usuario desde el localStorage, empezamos sin loading
+  const [loading, setLoading] = useState(!user);
   const [legalText, setLegalText] = useState('');
-  const isUserLoaded = useRef(false);
+  const isUserLoaded = useRef(!!user);
 
   const canAccess = useCallback((page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // Carga de texto legal
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -69,14 +91,14 @@ function App() {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
-          setLoading(false); // Apagamos carga si no hay sesión
+          setLoading(false);
         }
         return;
       }
 
       const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
-      // Si ya está cargado, solo actualizamos el rol si es necesario
+      // Si ya hay usuario y no es login forzado, solo validamos cambios de rol
       if (isUserLoaded.current && !forceRefresh) {
         if (user?.rol !== roleFromToken && isMounted) {
           setUser(prev => ({ ...prev, rol: roleFromToken }));
@@ -85,6 +107,7 @@ function App() {
         return;
       }
 
+      // Enriquecemos con datos de la DB
       const profile = await fetchUserProfile(session.user.id);
 
       if (isMounted) {
@@ -97,8 +120,7 @@ function App() {
 
         setUser(finalUser);
         isUserLoaded.current = true;
-        // Pequeño retardo para asegurar que el estado de React se asiente
-        setTimeout(() => { if (isMounted) setLoading(false); }, 100);
+        setLoading(false);
       }
     };
 
@@ -106,7 +128,7 @@ function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          await updateUserData(session, true);
+          await updateUserData(session, false); // false para no resetear lo que ya hidratamos
         } else {
           if (isMounted) setLoading(false);
         }
@@ -118,16 +140,16 @@ function App() {
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' && !session) {
-        if (isMounted) setLoading(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session) await updateUserData(session, event === 'SIGNED_IN');
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        await updateUserData(session, event === 'SIGNED_IN');
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
           setLoading(false);
         }
+      } else if (event === 'INITIAL_SESSION' && !session) {
+        if (isMounted) setLoading(false);
       }
     });
 
@@ -137,14 +159,12 @@ function App() {
     };
   }, []);
 
-  // --- PUNTO CLAVE: BLOQUEO DE NAVEGACIÓN ---
-  if (loading) {
+  // Bloqueo de render solo si realmente no sabemos si hay usuario
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
-          Validando acceso seguro...
-        </p>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sistema</p>
       </div>
     );
   }
@@ -155,11 +175,9 @@ function App() {
     <>
       <Router>
         <Routes>
-          {/* Solo mostramos Login si estamos seguros de que NO hay usuario */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
-          {/* Rutas Protegidas: Solo evaluamos si user existe tras el loading */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
