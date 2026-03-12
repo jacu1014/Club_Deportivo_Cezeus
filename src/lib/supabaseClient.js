@@ -9,6 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'cezeus-auth-token' // Añadimos esto para diferenciar la sesión
+    storageKey: 'cezeus-auth-token',
+    storage: window.localStorage // Asegura persistencia física en el disco del navegador
   }
 });
