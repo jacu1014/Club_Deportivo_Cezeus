@@ -18,7 +18,7 @@ import NotificacionesPage from './pages/NotificacionesPage';
 import TermsModal from './components/TermsModal';
 
 function App() {
-  // 1. INTENTO DE CARGA INSTANTÁNEA (Pre-hidratación)
+  // 1. HIDRATACIÓN INICIAL (Mantenemos tu lógica que es buena)
   const [user, setUser] = useState(() => {
     const sessionKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
     if (sessionKey) {
@@ -34,7 +34,7 @@ function App() {
     return null;
   });
 
-  const [loading, setLoading] = useState(!user); // Si hay usuario en cache, no mostramos loader inicial
+  const [loading, setLoading] = useState(!user); 
   const [legalText, setLegalText] = useState('');
   const isUserLoaded = useRef(false);
 
@@ -43,7 +43,6 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // Carga de texto legal
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -53,9 +52,7 @@ function App() {
           .eq('nombre_tarifa', 'legal_consentimiento')
           .maybeSingle();
         if (data) setLegalText(data.descripcion);
-      } catch (err) {
-        console.error("Error legal:", err.message);
-      }
+      } catch (err) { console.error("Error legal:", err.message); }
     };
     fetchLegal();
   }, []);
@@ -72,10 +69,7 @@ function App() {
           .maybeSingle();
         if (error) throw error;
         return data;
-      } catch (e) {
-        console.error("Error recuperando perfil de DB:", e.message);
-        return null;
-      }
+      } catch (e) { return null; }
     };
 
     const updateUserData = async (session, forceRefresh = false) => {
@@ -146,8 +140,19 @@ function App() {
     };
   }, []);
 
-  // 2. PROTECCIÓN CONTRA CONGELAMIENTO
-  // Solo bloqueamos la pantalla si NO tenemos ni usuario en cache ni respuesta de sesión.
+  // --- CAMBIO CLAVE: PROTECCIÓN DE RUTAS DURANTE CARGA ---
+  // Esta función evita que el componente Navigate te eche si el sistema está "pensando"
+  const renderProtectedRoute = (page, Component, props = {}) => {
+    if (user && canAccess(page)) {
+      return <MainLayout user={user}><Component {...props} /></MainLayout>;
+    }
+    // Si está cargando, NO redireccionamos. Devolvemos null para mantener la vista actual.
+    if (loading) return null; 
+    
+    // Solo si terminó de cargar y NO hay usuario, mandamos al login
+    return <Navigate to={user ? defaultPath : "/login"} replace />;
+  };
+
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -163,22 +168,22 @@ function App() {
     <>
       <Router>
         <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
+          <Route path="/login" element={!user && !loading ? <Login /> : (loading ? null : <Navigate to={defaultPath} replace />)} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
-          {/* Rutas Protegidas - Lógica mejorada para evitar expulsión por delay */}
-          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? <MainLayout user={user}><Alumnos /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/dashboard" element={renderProtectedRoute(PaginasApp.DASHBOARD, DashboardPage, { user })} />
+          <Route path="/notificaciones" element={renderProtectedRoute(PaginasApp.NOTIFICACIONES, NotificacionesPage, { user })} />
+          <Route path="/nosotros" element={renderProtectedRoute(PaginasApp.NOSOTROS, Nosotros)} />
+          <Route path="/alumnos" element={renderProtectedRoute(PaginasApp.ALUMNOS, Alumnos)} />
+          <Route path="/calendario" element={renderProtectedRoute(PaginasApp.CALENDARIO, CalendarioPage, { userRol: user?.rol })} />
+          <Route path="/configuracion" element={renderProtectedRoute(PaginasApp.CONFIGURACION, Configuracion, { user })} />
+          <Route path="/pagos" element={renderProtectedRoute(PaginasApp.PAGOS, PagosModule, { user })} />
           
-          <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="/" element={loading ? null : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="*" element={loading ? null : <Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
+
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal
           user={user}
