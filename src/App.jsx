@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
+
 // Layouts y Páginas
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
@@ -14,6 +15,7 @@ import CalendarioPage from './pages/CalendarioPage';
 import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
+
 // Componentes adicionales
 import TermsModal from './components/TermsModal';
 
@@ -75,10 +77,12 @@ function App() {
 
       const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
+      // Si ya está cargado y no es forzado, solo actualizamos el rol si cambió
       if (isUserLoaded.current && !forceRefresh) {
         if (user?.rol !== roleFromToken && isMounted) {
           setUser(prev => ({ ...prev, rol: roleFromToken }));
         }
+        setLoading(false); // Aseguramos apagar el loader aquí también
         return;
       }
 
@@ -99,6 +103,14 @@ function App() {
     };
 
     const initApp = async () => {
+      // 1. Seguro de carga: Si en 4 segundos no ha cargado, forzamos el apagado del loader
+      const loadTimeout = setTimeout(() => {
+        if (isMounted && loading) {
+          console.warn("InitApp: Timeout de seguridad alcanzado");
+          setLoading(false);
+        }
+      }, 4000);
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -109,16 +121,20 @@ function App() {
       } catch (error) {
         console.error("Error init:", error.message);
         if (isMounted) setLoading(false);
+      } finally {
+        clearTimeout(loadTimeout);
       }
     };
 
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' && !session) {
-        if (isMounted) setLoading(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        await updateUserData(session, event === 'SIGNED_IN');
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session) {
+          await updateUserData(session, event === 'SIGNED_IN');
+        } else {
+          if (isMounted) setLoading(false);
+        }
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
@@ -161,7 +177,7 @@ function App() {
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          {/* Rutas Protegidas */}
+          
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
@@ -169,10 +185,12 @@ function App() {
           <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
+          
           <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
+      
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal
           user={user}
