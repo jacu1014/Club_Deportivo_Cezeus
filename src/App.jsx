@@ -16,64 +16,50 @@ import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
 
-// Componentes
+// Componentes adicionales
 import TermsModal from './components/TermsModal';
-
-// --- COMPONENTE DE RUTA PROTEGIDA ---
-const ProtectedRoute = ({ user, page, canAccess, children }) => {
-  if (!user) return <Navigate to="/login" replace />;
-  
-  if (!canAccess(page)) {
-    const fallback = user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
-    return <Navigate to={fallback} replace />;
-  }
-
-  return <MainLayout user={user}>{children}</MainLayout>;
-};
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState('');
 
+  // 1. Memorizamos canAccess para estabilidad
   const canAccess = useCallback((page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // 1. Cargar texto legal
+  // 2. Cargar texto legal (Consentimiento)
   useEffect(() => {
     const fetchLegal = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('configuraciones_club')
           .select('descripcion')
           .eq('nombre_tarifa', 'legal_consentimiento')
           .maybeSingle();
-        if (error) throw error;
         if (data) setLegalText(data.descripcion);
       } catch (err) {
-        console.error("Error cargando consentimiento:", err.message);
+        console.error("Error legal:", err.message);
       }
     };
     fetchLegal();
   }, []);
 
-  // 2. Lógica de Autenticación y Despertar de Inactividad
+  // 3. Gestión de Autenticación y Rescate de Sesión Inactiva
   useEffect(() => {
     let isMounted = true;
 
     const fetchUserProfile = async (userId) => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('usuarios')
           .select('*')
           .eq('id', userId)
           .maybeSingle();
-        if (error) throw error;
         return data;
       } catch (e) {
-        console.error("Error recuperando perfil:", e.message);
         return null;
       }
     };
@@ -85,7 +71,7 @@ function App() {
           setUser(profile || { 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
-            rol: 'ALUMNO', 
+            rol: 'ALUMNO',
             acepta_terminos: false 
           });
         }
@@ -103,7 +89,7 @@ function App() {
         const { data: { session } } = await supabase.auth.getSession();
         await updateUserData(session);
       } catch (error) {
-        console.error("Error inicializando:", error.message);
+        console.error("Error init:", error.message);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -114,9 +100,8 @@ function App() {
 
     initApp();
 
-    // Listener de Supabase para eventos de sesión
+    // Listener para cambios de Auth y Refresh de Token
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Manejamos el refresco del token explícitamente
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await updateUserData(session);
       }
@@ -125,8 +110,7 @@ function App() {
       }
     });
 
-    // --- SOLUCIÓN PARA LA INACTIVIDAD ---
-    // Cuando el usuario vuelve a la pestaña, forzamos un chequeo de sesión
+    // SOLUCIÓN A INACTIVIDAD: Al volver a la pestaña, re-verificamos sesión
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         const { data: { session } } = await supabase.auth.getSession();
@@ -143,11 +127,6 @@ function App() {
     };
   }, []);
 
-  const getDefaultRoute = () => {
-    if (!user) return "/login";
-    return user.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -157,38 +136,65 @@ function App() {
     );
   }
 
+  // Ruta por defecto según rol
+  const defaultPath = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+
   return (
     <>
       <Router>
         <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to={getDefaultRoute()} replace />} />
+          <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {[
-            { path: "/dashboard", page: PaginasApp.DASHBOARD, component: DashboardPage },
-            { path: "/notificaciones", page: PaginasApp.NOTIFICACIONES, component: NotificacionesPage },
-            { path: "/nosotros", page: PaginasApp.NOSOTROS, component: Nosotros },
-            { path: "/alumnos", page: PaginasApp.ALUMNOS, component: Alumnos },
-            { path: "/calendario", page: PaginasApp.CALENDARIO, component: CalendarioPage },
-            { path: "/configuracion", page: PaginasApp.CONFIGURACION, component: Configuracion },
-            { path: "/pagos", page: PaginasApp.PAGOS, component: PagosModule },
-          ].map(({ path, page, component: Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <ProtectedRoute user={user} page={page} canAccess={canAccess}>
-                  <Component user={user} userRol={user?.rol} />
-                </ProtectedRoute>
-              }
-            />
-          ))}
+          {/* Rutas Protegidas */}
+          <Route path="/dashboard" element={
+            user && canAccess(PaginasApp.DASHBOARD) ? 
+            <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
 
-          <Route path="/" element={<Navigate to={getDefaultRoute()} replace />} />
-          <Route path="*" element={<Navigate to={getDefaultRoute()} replace />} />
+          <Route path="/notificaciones" element={
+            user && canAccess(PaginasApp.NOTIFICACIONES) ? 
+            <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/nosotros" element={
+            user && canAccess(PaginasApp.NOSOTROS) ? 
+            <MainLayout user={user}><Nosotros /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/alumnos" element={
+            user && canAccess(PaginasApp.ALUMNOS) ? 
+            <MainLayout user={user}><Alumnos /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/calendario" element={
+            user && canAccess(PaginasApp.CALENDARIO) ? 
+            <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/configuracion" element={
+            user && canAccess(PaginasApp.CONFIGURACION) ? 
+            <MainLayout user={user}><Configuracion user={user} /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/pagos" element={
+            user && canAccess(PaginasApp.PAGOS) ? 
+            <MainLayout user={user}><PagosModule user={user} /></MainLayout> : 
+            <Navigate to="/login" />
+          } />
+
+          <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
+          <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
 
+      {/* Modal de Términos: Bloquea si no ha aceptado */}
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal 
           user={user} 
