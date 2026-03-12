@@ -24,7 +24,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState('');
   
-  // Usamos una referencia para saber si ya tenemos un perfil válido y no perderlo en parpadeos de red
+  // Referencia para evitar reseteos de rol accidentales
   const isUserLoaded = useRef(false);
 
   const canAccess = useCallback((page) => {
@@ -76,24 +76,32 @@ function App() {
         return;
       }
 
-      // Si ya está cargado y no es un refresco forzado, no hacemos nada para evitar parpadeos
-      if (isUserLoaded.current && !forceRefresh) return;
+      // 1. PRIORIDAD: Extraer el rol directamente del TOKEN (JWT)
+      // Esto es instantáneo y no depende de la red.
+      const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
+      // Si ya está cargado y no es forzado, solo actualizamos si el rol cambió en el token
+      if (isUserLoaded.current && !forceRefresh) {
+        if (user?.rol !== roleFromToken) {
+          setUser(prev => ({ ...prev, rol: roleFromToken }));
+        }
+        return;
+      }
+
+      // 2. Intentar cargar datos extra desde la DB (nombres, fotos, etc.)
       const profile = await fetchUserProfile(session.user.id);
       
       if (isMounted) {
-        if (profile) {
-          setUser(profile);
-          isUserLoaded.current = true;
-        } else if (!isUserLoaded.current) {
-          // SOLO aplicamos el fallback si no hay absolutamente nada cargado previo
-          setUser({ 
-            id: session.user.id, 
-            primer_nombre: 'Usuario', 
-            rol: 'ALUMNO',
-            acepta_terminos: false 
-          });
-        }
+        // Combinamos la info de la DB con el rol garantizado del Token
+        const finalUser = profile ? { ...profile, rol: roleFromToken } : { 
+          id: session.user.id, 
+          primer_nombre: session.user.user_metadata?.first_name || 'Usuario', 
+          rol: roleFromToken,
+          acepta_terminos: false 
+        };
+        
+        setUser(finalUser);
+        isUserLoaded.current = true;
       }
     };
 
@@ -112,7 +120,7 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // TOKEN_REFRESHED ocurre mucho, forceRefresh=false evita que se resetee el rol a cada rato
+        // No forzamos refresh en cada parpadeo de token para no perder permisos
         await updateUserData(session, event === 'SIGNED_IN');
       }
       if (event === 'SIGNED_OUT') {
@@ -126,7 +134,6 @@ function App() {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         const { data: { session } } = await supabase.auth.getSession();
-        // Al volver a la pestaña, solo actualizamos si el token realmente expiró
         if (session) await updateUserData(session, false);
       }
     };
@@ -138,13 +145,13 @@ function App() {
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [user?.rol]); // Escuchamos cambios en el rol para re-validar accesos
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Verificando sesión</p>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sesión</p>
       </div>
     );
   }
