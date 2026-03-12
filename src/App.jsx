@@ -16,7 +16,7 @@ import Nosotros from './pages/Nosotros';
 import DashboardPage from './pages/DashboardPage';
 import NotificacionesPage from './pages/NotificacionesPage';
 
-// Componente Nuevo
+// Componentes
 import TermsModal from './components/TermsModal';
 
 // --- COMPONENTE DE RUTA PROTEGIDA ---
@@ -41,7 +41,7 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   };
 
-  // 1. Cargar texto legal
+  // 1. Cargar texto legal desde la configuración
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -60,13 +60,12 @@ function App() {
     fetchLegal();
   }, []);
 
-  // 2. Lógica de Autenticación y Perfil Real
+  // 2. Gestión de Sesión y Perfil de Usuario
   useEffect(() => {
     let isMounted = true;
 
-    // Función unificada para obtener el perfil real de la DB
+    // Función para obtener datos reales de la tabla 'usuarios'
     const fetchUserProfile = async (userId) => {
-      console.log("🔍 [App.tsx] Buscando perfil en tabla 'usuarios' para:", userId);
       try {
         const { data, error } = await supabase
           .from('usuarios')
@@ -75,8 +74,8 @@ function App() {
           .maybeSingle();
 
         if (error) {
-          console.error("❌ [App.tsx] Error detectado (Posible RLS):", error.message);
-          return null; // Si hay error 500/RLS, no devolvemos nada para no falsear el rol
+          console.error("❌ Error al recuperar perfil (Revisar RLS):", error.message);
+          return null;
         }
         return data;
       } catch (e) {
@@ -98,6 +97,7 @@ function App() {
 
     initApp();
 
+    // Escuchar cambios en el estado de autenticación (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const profile = await fetchUserProfile(session.user.id);
@@ -113,6 +113,7 @@ function App() {
     };
   }, []);
 
+  // Pantalla de Carga
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -173,7 +174,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* Redirección inteligente corregida */}
+          {/* Redirección Inteligente según Rol */}
           <Route 
             path="/" 
             element={
@@ -198,7 +199,7 @@ function App() {
         </Routes>
       </Router>
 
-      {/* MODAL DE TÉRMINOS */}
+      {/* MODAL DE TÉRMINOS Y CONDICIONES */}
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal 
           user={user} 
