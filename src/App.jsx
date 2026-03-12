@@ -22,6 +22,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState('');
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [error, setError] = useState(null);
 
   // Referencia para evitar reseteos de rol accidentales
   const isUserLoaded = useRef(false);
@@ -49,6 +50,7 @@ function App() {
 
   useEffect(() => {
     let isMounted = true;
+    let timeoutId;
 
     const fetchUserProfile = async (userId) => {
       try {
@@ -105,6 +107,7 @@ function App() {
         await updateUserData(session, true);
       } catch (error) {
         console.error("Error init:", error.message);
+        setError("Error al cargar la sesión. Por favor, inténtalo de nuevo.");
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -112,6 +115,14 @@ function App() {
         }
       }
     };
+
+    // Establece un tiempo de espera máximo de 10 segundos para la carga inicial
+    timeoutId = setTimeout(() => {
+      if (isMounted && !initialLoadComplete) {
+        setLoading(false);
+        setError("La carga inicial está tardando demasiado. Por favor, recarga la página.");
+      }
+    }, 10000);
 
     initApp();
 
@@ -138,6 +149,7 @@ function App() {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -148,6 +160,20 @@ function App() {
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
         <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sesión</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
+        <p className="text-red-500 text-lg font-bold">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-cyan-400 text-[#05080d] rounded hover:bg-cyan-500"
+        >
+          Recargar
+        </button>
       </div>
     );
   }
