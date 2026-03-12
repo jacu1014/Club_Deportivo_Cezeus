@@ -25,7 +25,8 @@ const PagosModule = ({ user }: { user: any }) => {
     tipo: null as string | null
   });
 
-  const userRol = user?.rol || user?.user_metadata?.rol;
+  // ACTUALIZACIÓN: Priorizamos el rol de los metadatos sincronizados
+  const userRol = user?.user_metadata?.rol || user?.rol;
 
   const mostrarToast = useCallback((mensaje: string, tipo: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -35,7 +36,6 @@ const PagosModule = ({ user }: { user: any }) => {
     }, 3000);
   }, []);
 
-  // --- CARGA DE DATOS ACTUALIZADA ---
   const cargarCaja = useCallback(async () => {
     setLoading(true);
     try {
@@ -50,17 +50,28 @@ const PagosModule = ({ user }: { user: any }) => {
           proveedores (
             id, nombre_proveedor, nit_cc
           )
-        `); // <-- Se agregó la relación con proveedores
+        `);
 
       if (userRol === 'ALUMNO' || userRol === 'ENTRENADOR') {
         query = query.eq('usuario_id', user.id);
       }
 
       const { data, error } = await query.order('fecha_pago', { ascending: false });
-      if (error) throw error;
+      
+      if (error) {
+        // Si detectamos error de RLS (recursión), lo notificamos pero quitamos el loading
+        console.error("Error en query Pagos:", error.message);
+        if (error.message.includes('recursion')) {
+          mostrarToast('Error de acceso a perfiles (RLS)', 'error');
+        } else {
+          mostrarToast('Error al cargar datos', 'error');
+        }
+        return;
+      }
+
       if (data) setDatos(data);
     } catch (error) {
-      mostrarToast('Error al cargar datos', 'error');
+      mostrarToast('Error inesperado de red', 'error');
     } finally {
       setLoading(false);
     }
@@ -70,7 +81,6 @@ const PagosModule = ({ user }: { user: any }) => {
     cargarCaja();
   }, [cargarCaja]);
 
-  // --- LÓGICA DE FILTRADO MAESTRA ACTUALIZADA ---
   const datosFiltrados = useMemo(() => {
     return datos.filter(d => {
       const fechaObj = new Date(d.fecha_pago);
@@ -91,7 +101,6 @@ const PagosModule = ({ user }: { user: any }) => {
 
       const term = filtros.busqueda.toLowerCase().trim();
       
-      // Lógica para detectar nombre ya sea Usuario o Proveedor
       const u = d.usuarios;
       const p = d.proveedores;
       
@@ -152,7 +161,15 @@ const PagosModule = ({ user }: { user: any }) => {
         )}
       </div>
 
-      <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
+      {/* MEJORA: Evitar renderizar el Dashboard si no hay datos o hay carga */}
+      {!loading && datosFiltrados.length > 0 ? (
+        <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
+      ) : !loading && (
+        <div className="bg-slate-900/40 p-10 rounded-3xl border border-white/5 flex flex-col items-center justify-center text-center">
+           <span className="material-symbols-outlined text-slate-700 text-4xl mb-2">query_stats</span>
+           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sin datos para visualizar gráficos</p>
+        </div>
+      )}
 
       <FinanceTable 
         datosOriginales={datos}
@@ -173,8 +190,11 @@ const PagosModule = ({ user }: { user: any }) => {
       />
 
       {loading && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110]">
-          <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-2 border-primary"></div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[110]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div>
+            <p className="text-primary text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Sincronizando Caja</p>
+          </div>
         </div>
       )}
     </div>
