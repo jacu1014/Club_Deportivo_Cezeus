@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types'; 
@@ -23,14 +23,15 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState('');
+  
+  // Usamos una referencia para saber si ya tenemos un perfil válido y no perderlo en parpadeos de red
+  const isUserLoaded = useRef(false);
 
-  // 1. Memorizamos canAccess para estabilidad
   const canAccess = useCallback((page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // 2. Cargar texto legal (Consentimiento)
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -47,74 +48,86 @@ function App() {
     fetchLegal();
   }, []);
 
-  // 3. Gestión de Autenticación y Rescate de Sesión Inactiva
   useEffect(() => {
     let isMounted = true;
 
     const fetchUserProfile = async (userId) => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('usuarios')
           .select('*')
           .eq('id', userId)
           .maybeSingle();
+        
+        if (error) throw error;
         return data;
       } catch (e) {
+        console.error("Error recuperando perfil de DB:", e.message);
         return null;
       }
     };
 
-    const updateUserData = async (session) => {
-      if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id);
+    const updateUserData = async (session, forceRefresh = false) => {
+      if (!session?.user) {
         if (isMounted) {
-          setUser(profile || { 
+          setUser(null);
+          isUserLoaded.current = false;
+        }
+        return;
+      }
+
+      // Si ya está cargado y no es un refresco forzado, no hacemos nada para evitar parpadeos
+      if (isUserLoaded.current && !forceRefresh) return;
+
+      const profile = await fetchUserProfile(session.user.id);
+      
+      if (isMounted) {
+        if (profile) {
+          setUser(profile);
+          isUserLoaded.current = true;
+        } else if (!isUserLoaded.current) {
+          // SOLO aplicamos el fallback si no hay absolutamente nada cargado previo
+          setUser({ 
             id: session.user.id, 
             primer_nombre: 'Usuario', 
             rol: 'ALUMNO',
             acepta_terminos: false 
           });
         }
-      } else {
-        if (isMounted) setUser(null);
       }
     };
 
     const initApp = async () => {
-      const timeout = setTimeout(() => {
-        if (isMounted && loading) setLoading(false);
-      }, 6000);
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        await updateUserData(session);
+        await updateUserData(session, true);
       } catch (error) {
         console.error("Error init:", error.message);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          clearTimeout(timeout);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
     initApp();
 
-    // Listener para cambios de Auth y Refresh de Token
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        await updateUserData(session);
+        // TOKEN_REFRESHED ocurre mucho, forceRefresh=false evita que se resetee el rol a cada rato
+        await updateUserData(session, event === 'SIGNED_IN');
       }
       if (event === 'SIGNED_OUT') {
-        if (isMounted) setUser(null);
+        if (isMounted) {
+          setUser(null);
+          isUserLoaded.current = false;
+        }
       }
     });
 
-    // SOLUCIÓN A INACTIVIDAD: Al volver a la pestaña, re-verificamos sesión
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) await updateUserData(session);
+        // Al volver a la pestaña, solo actualizamos si el token realmente expiró
+        if (session) await updateUserData(session, false);
       }
     };
 
@@ -131,12 +144,11 @@ function App() {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Iniciando Cezeus</p>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Verificando sesión</p>
       </div>
     );
   }
 
-  // Ruta por defecto según rol
   const defaultPath = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
 
   return (
@@ -146,55 +158,19 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Rutas Protegidas */}
-          <Route path="/dashboard" element={
-            user && canAccess(PaginasApp.DASHBOARD) ? 
-            <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/notificaciones" element={
-            user && canAccess(PaginasApp.NOTIFICACIONES) ? 
-            <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/nosotros" element={
-            user && canAccess(PaginasApp.NOSOTROS) ? 
-            <MainLayout user={user}><Nosotros /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/alumnos" element={
-            user && canAccess(PaginasApp.ALUMNOS) ? 
-            <MainLayout user={user}><Alumnos /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/calendario" element={
-            user && canAccess(PaginasApp.CALENDARIO) ? 
-            <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/configuracion" element={
-            user && canAccess(PaginasApp.CONFIGURACION) ? 
-            <MainLayout user={user}><Configuracion user={user} /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
-
-          <Route path="/pagos" element={
-            user && canAccess(PaginasApp.PAGOS) ? 
-            <MainLayout user={user}><PagosModule user={user} /></MainLayout> : 
-            <Navigate to="/login" />
-          } />
+          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? <MainLayout user={user}><Alumnos /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to="/login" />} />
+          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to="/login" />} />
 
           <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
 
-      {/* Modal de Términos: Bloquea si no ha aceptado */}
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal 
           user={user} 
@@ -202,7 +178,6 @@ function App() {
           onAccepted={() => setUser(prev => ({ ...prev, acepta_terminos: true }))} 
         />
       )}
-
       <Analytics />
     </>
   );
