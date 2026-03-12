@@ -60,7 +60,6 @@ function App() {
         if (error) throw error;
         return data;
       } catch (e) {
-        console.error("Error recuperando perfil de DB:", e.message);
         return null;
       }
     };
@@ -70,19 +69,19 @@ function App() {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
-          setLoading(false);
+          setLoading(false); // Apagamos carga si no hay sesión
         }
         return;
       }
 
       const roleFromToken = session.user.user_metadata?.rol || 'ALUMNO';
 
-      // Si ya está cargado y no es forzado, solo actualizamos el rol si cambió
+      // Si ya está cargado, solo actualizamos el rol si es necesario
       if (isUserLoaded.current && !forceRefresh) {
         if (user?.rol !== roleFromToken && isMounted) {
           setUser(prev => ({ ...prev, rol: roleFromToken }));
         }
-        setLoading(false); // Aseguramos apagar el loader aquí también
+        setLoading(false);
         return;
       }
 
@@ -98,19 +97,12 @@ function App() {
 
         setUser(finalUser);
         isUserLoaded.current = true;
-        setLoading(false);
+        // Pequeño retardo para asegurar que el estado de React se asiente
+        setTimeout(() => { if (isMounted) setLoading(false); }, 100);
       }
     };
 
     const initApp = async () => {
-      // 1. Seguro de carga: Si en 4 segundos no ha cargado, forzamos el apagado del loader
-      const loadTimeout = setTimeout(() => {
-        if (isMounted && loading) {
-          console.warn("InitApp: Timeout de seguridad alcanzado");
-          setLoading(false);
-        }
-      }, 4000);
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -119,22 +111,17 @@ function App() {
           if (isMounted) setLoading(false);
         }
       } catch (error) {
-        console.error("Error init:", error.message);
         if (isMounted) setLoading(false);
-      } finally {
-        clearTimeout(loadTimeout);
       }
     };
 
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session) {
-          await updateUserData(session, event === 'SIGNED_IN');
-        } else {
-          if (isMounted) setLoading(false);
-        }
+      if (event === 'INITIAL_SESSION' && !session) {
+        if (isMounted) setLoading(false);
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session) await updateUserData(session, event === 'SIGNED_IN');
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
@@ -144,27 +131,20 @@ function App() {
       }
     });
 
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) await updateUserData(session, false);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
+  // --- PUNTO CLAVE: BLOQUEO DE NAVEGACIÓN ---
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando Sistema</p>
+        <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
+          Validando acceso seguro...
+        </p>
       </div>
     );
   }
@@ -175,9 +155,11 @@ function App() {
     <>
       <Router>
         <Routes>
+          {/* Solo mostramos Login si estamos seguros de que NO hay usuario */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
+          {/* Rutas Protegidas: Solo evaluamos si user existe tras el loading */}
           <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
           <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
@@ -190,7 +172,7 @@ function App() {
           <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
         </Routes>
       </Router>
-      
+
       {user && user.acepta_terminos === false && legalText && (
         <TermsModal
           user={user}
