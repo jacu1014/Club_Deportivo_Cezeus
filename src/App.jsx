@@ -41,7 +41,7 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   };
 
-  // Cargar texto del consentimiento desde configuraciones_club
+  // 1. Cargar texto legal
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -49,7 +49,7 @@ function App() {
           .from('configuraciones_club')
           .select('descripcion')
           .eq('nombre_tarifa', 'legal_consentimiento')
-          .single();
+          .maybeSingle();
         
         if (error) throw error;
         if (data) setLegalText(data.descripcion);
@@ -57,60 +57,59 @@ function App() {
         console.error("Error cargando consentimiento:", err.message);
       }
     };
-
     fetchLegal();
   }, []);
 
+  // 2. Lógica de Autenticación y Perfil Real
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Carga lenta: forzando inicio...");
-        setLoading(false);
+    let isMounted = true;
+
+    // Función unificada para obtener el perfil real de la DB
+    const fetchUserProfile = async (userId) => {
+      console.log("🔍 [App.tsx] Buscando perfil en tabla 'usuarios' para:", userId);
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("❌ [App.tsx] Error detectado (Posible RLS):", error.message);
+          return null; // Si hay error 500/RLS, no devolvemos nada para no falsear el rol
+        }
+        return data;
+      } catch (e) {
+        return null;
       }
-    }, 5000);
+    };
 
     const initApp = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session?.user) {
-          const { data: dbUser } = await supabase
-            .from('usuarios')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          setUser(dbUser || { 
-            id: session.user.id, 
-            primer_nombre: 'Usuario', 
-            rol: 'ALUMNO',
-            acepta_terminos: false 
-          });
+          const profile = await fetchUserProfile(session.user.id);
+          if (isMounted) setUser(profile);
         }
-      } catch (error) {
-        console.error("Error en initApp:", error.message);
       } finally {
-        setLoading(false);
-        clearTimeout(timeout);
+        if (isMounted) setLoading(false);
       }
     };
 
     initApp();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle()
-          .then(({ data }) => {
-            setUser(data || { id: session.user.id, primer_nombre: 'Usuario', rol: 'ALUMNO', acepta_terminos: false });
-          });
+        const profile = await fetchUserProfile(session.user.id);
+        if (isMounted) setUser(profile);
       } else {
-        setUser(null);
+        if (isMounted) setUser(null);
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
-      clearTimeout(timeout);
     };
   }, []);
 
@@ -174,7 +173,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* Redirección inteligente */}
+          {/* Redirección inteligente corregida */}
           <Route 
             path="/" 
             element={
@@ -199,8 +198,8 @@ function App() {
         </Routes>
       </Router>
 
-      {/* MODAL DE TÉRMINOS (Fuera del Router para bloquear todo) */}
-      {user && !user.acepta_terminos && legalText && (
+      {/* MODAL DE TÉRMINOS */}
+      {user && user.acepta_terminos === false && legalText && (
         <TermsModal 
           user={user} 
           content={legalText} 
