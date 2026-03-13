@@ -1,21 +1,43 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
-// Layouts y Páginas
+
+// Carga inmediata — siempre necesarios
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import MainLayout from './layouts/MainLayout';
-import Alumnos from './pages/Alumnos';
-import Configuracion from './pages/Configuracion';
-import PagosModule from './pages/PagosModule';
-import CalendarioPage from './pages/CalendarioPage';
-import Nosotros from './pages/Nosotros';
-import DashboardPage from './pages/DashboardPage';
-import NotificacionesPage from './pages/NotificacionesPage';
-// Componentes adicionales
 import TermsModal from './components/TermsModal';
+
+// Lazy loading — solo se cargan cuando el usuario navega a esa ruta
+const Alumnos          = lazy(() => import('./pages/Alumnos'));
+const Configuracion    = lazy(() => import('./pages/Configuracion'));
+const PagosModule      = lazy(() => import('./pages/PagosModule'));
+const CalendarioPage   = lazy(() => import('./pages/CalendarioPage'));
+const Nosotros         = lazy(() => import('./pages/Nosotros'));
+const DashboardPage    = lazy(() => import('./pages/DashboardPage'));
+const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage'));
+
+// Spinner reutilizable para Suspense
+const PageSpinner = () => (
+  <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
+    <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
+    <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Cargando módulo...</p>
+  </div>
+);
+
+// Componente que preserva la ruta actual en sessionStorage
+const RoutePreserver = () => {
+  const location = useLocation();
+  useEffect(() => {
+    // Guardar la ruta actual excepto login y reset-password
+    if (!['/login', '/reset-password'].includes(location.pathname)) {
+      sessionStorage.setItem('last_route', location.pathname);
+    }
+  }, [location.pathname]);
+  return null;
+};
 
 function App() {
   const [user, setUser] = useState(null);
@@ -38,8 +60,8 @@ function App() {
           .eq('nombre_tarifa', 'legal_consentimiento')
           .maybeSingle();
         if (data) setLegalText(data.descripcion);
-      } catch (err) {
-        console.error("Error legal:", err.message);
+      } catch {
+        // silencioso en produccion
       }
     };
     fetchLegal();
@@ -57,8 +79,7 @@ function App() {
           .maybeSingle();
         if (error) throw error;
         return data;
-      } catch (e) {
-        console.error("Error recuperando perfil de DB:", e.message);
+      } catch {
         return null;
       }
     };
@@ -85,13 +106,14 @@ function App() {
       const profile = await fetchUserProfile(session.user.id);
 
       if (isMounted) {
-        const finalUser = profile ? { ...profile, rol: roleFromToken } : {
-          id: session.user.id,
-          primer_nombre: session.user.user_metadata?.first_name || 'Usuario',
-          rol: roleFromToken,
-          acepta_terminos: false
-        };
-
+        const finalUser = profile
+          ? { ...profile, rol: roleFromToken }
+          : {
+              id: session.user.id,
+              primer_nombre: session.user.user_metadata?.first_name || 'Usuario',
+              rol: roleFromToken,
+              acepta_terminos: false
+            };
         setUser(finalUser);
         isUserLoaded.current = true;
         setLoading(false);
@@ -106,8 +128,7 @@ function App() {
         } else {
           if (isMounted) setLoading(false);
         }
-      } catch (error) {
-        console.error("Error init:", error.message);
+      } catch {
         if (isMounted) setLoading(false);
       }
     };
@@ -124,6 +145,7 @@ function App() {
           setUser(null);
           isUserLoaded.current = false;
           setLoading(false);
+          sessionStorage.removeItem('last_route');
         }
       }
     });
@@ -155,25 +177,64 @@ function App() {
 
   const defaultPath = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
 
+  // CORREGIDO: preservar la última ruta visitada en el refresh
+  const lastRoute = sessionStorage.getItem('last_route');
+  const redirectPath = lastRoute && user ? lastRoute : defaultPath;
+
   return (
     <>
       <Router>
-        <Routes>
-          <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultPath} replace />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          {/* Rutas Protegidas */}
-          <Route path="/dashboard" element={user && canAccess(PaginasApp.DASHBOARD) ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/notificaciones" element={user && canAccess(PaginasApp.NOTIFICACIONES) ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/nosotros" element={user && canAccess(PaginasApp.NOSOTROS) ? <MainLayout user={user}><Nosotros /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/alumnos" element={user && canAccess(PaginasApp.ALUMNOS) ? <MainLayout user={user}><Alumnos /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/calendario" element={user && canAccess(PaginasApp.CALENDARIO) ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/configuracion" element={user && canAccess(PaginasApp.CONFIGURACION) ? <MainLayout user={user}><Configuracion user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/pagos" element={user && canAccess(PaginasApp.PAGOS) ? <MainLayout user={user}><PagosModule user={user} /></MainLayout> : <Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="/" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
-          <Route path="*" element={<Navigate to={user ? defaultPath : "/login"} replace />} />
-        </Routes>
+        <RoutePreserver />
+        <Suspense fallback={<PageSpinner />}>
+          <Routes>
+            <Route path="/login" element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Rutas Protegidas */}
+            <Route path="/dashboard" element={
+              user && canAccess(PaginasApp.DASHBOARD)
+                ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/notificaciones" element={
+              user && canAccess(PaginasApp.NOTIFICACIONES)
+                ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/nosotros" element={
+              user && canAccess(PaginasApp.NOSOTROS)
+                ? <MainLayout user={user}><Nosotros /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/alumnos" element={
+              user && canAccess(PaginasApp.ALUMNOS)
+                ? <MainLayout user={user}><Alumnos /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/calendario" element={
+              user && canAccess(PaginasApp.CALENDARIO)
+                ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/configuracion" element={
+              user && canAccess(PaginasApp.CONFIGURACION)
+                ? <MainLayout user={user}><Configuracion user={user} /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+            <Route path="/pagos" element={
+              user && canAccess(PaginasApp.PAGOS)
+                ? <MainLayout user={user}><PagosModule user={user} /></MainLayout>
+                : <Navigate to={user ? defaultPath : "/login"} replace />
+            } />
+
+            <Route path="/" element={<Navigate to={user ? redirectPath : "/login"} replace />} />
+            <Route path="*" element={<Navigate to={user ? redirectPath : "/login"} replace />} />
+          </Routes>
+        </Suspense>
       </Router>
-      {user && user.acepta_terminos === false && legalText && (
+
+      {/* CORREGIDO: !user.acepta_terminos en lugar de === false (funciona con null y false) */}
+      {user && !user.acepta_terminos && legalText && (
         <TermsModal
           user={user}
           content={legalText}
