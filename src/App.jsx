@@ -54,7 +54,7 @@ function App() {
           .select('descripcion')
           .eq('nombre_tarifa', 'legal_consentimiento')
           .maybeSingle();
-        setLegalText(data?.descripcion || '');
+        setLegalText(data?.descripcion || 'Al continuar, aceptas los términos y condiciones de participación del Club Deportivo Cezeus.');
       } catch {
         setLegalText(''); // en caso de error, no bloquear
       }
@@ -185,7 +185,7 @@ function App() {
 
   // CORREGIDO: mostrar TermsModal solo cuando legalText ya cargó (no null)
   // y el usuario tiene acepta_terminos en false o null
-  const mostrarTerms = user && !user.acepta_terminos && legalText !== null && legalText !== '';
+  const mostrarTerms = user && !user.acepta_terminos && legalText !== null;
 
   return (
     <>
