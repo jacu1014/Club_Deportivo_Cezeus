@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { registrarLog } from '../lib/activity';
@@ -13,23 +13,9 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const clearSession = async () => {
-      try {
-        await supabase.auth.signOut();
-        if (isMounted) {
-          // Solo limpiar el token propio, no todo el localStorage
-          localStorage.removeItem('cezeus-auth-token');
-          sessionStorage.clear();
-        }
-      } catch (e) {
-        // Silencioso en produccion
-      }
-    };
-    clearSession();
-    return () => { isMounted = false; };
-  }, []);
+  // ELIMINADO: useEffect con signOut() — causaba AbortError al cancelar
+  // requests internos de Supabase antes de que terminaran.
+  // El logout real se maneja en Sidebar.tsx con navigate('/login').
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -40,7 +26,8 @@ const Login = () => {
     setSuccessMessage(null);
 
     try {
-      await supabase.auth.signOut();
+      // ELIMINADO: signOut() previo al login — causaba AbortError
+      // Solo limpiamos el token local sin llamar a Supabase
       localStorage.removeItem('cezeus-auth-token');
 
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -51,7 +38,6 @@ const Login = () => {
       if (authError) throw authError;
 
       if (data?.user) {
-        // Verificar perfil en la tabla usuarios
         const { data: usuario, error: dbError } = await supabase
           .from('usuarios')
           .select('rol, primer_nombre')
@@ -60,7 +46,6 @@ const Login = () => {
 
         if (dbError) console.error("Error al buscar perfil:", dbError.message);
 
-        // NUEVO: registrar log de login exitoso
         await registrarLog({
           accion: 'LOGIN',
           modulo: 'AUTENTICACION',
@@ -76,13 +61,15 @@ const Login = () => {
       }
 
     } catch (err) {
-      // NUEVO: registrar log de login fallido
-      await registrarLog({
-        accion: 'LOGIN_FALLIDO',
-        modulo: 'AUTENTICACION',
-        descripcion: `Intento de acceso fallido para: ${email.trim().toLowerCase()}`,
-        detalles: { motivo: err.message }
-      }).catch(() => {}); // silencioso si falla el log
+      // No loguear AbortError — son cancelaciones internas, no fallos reales
+      if (err?.name !== 'AbortError') {
+        await registrarLog({
+          accion: 'LOGIN_FALLIDO',
+          modulo: 'AUTENTICACION',
+          descripcion: `Intento de acceso fallido para: ${email.trim().toLowerCase()}`,
+          detalles: { motivo: err.message }
+        }).catch(() => {});
+      }
 
       const errorMessages = {
         'Invalid login credentials': 'El correo o la contraseña son incorrectos.',
