@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { registrarLog } from '../lib/activity';
 import Logo from '../components/Logo_Cezeus.jpeg';
 
 const Login = () => {
@@ -14,21 +15,18 @@ const Login = () => {
 
   useEffect(() => {
     let isMounted = true;
-
     const clearSession = async () => {
       try {
-        // Al cargar el login, nos aseguramos de que no haya sesiones activas colgadas
         await supabase.auth.signOut();
         if (isMounted) {
-          localStorage.clear();
+          // Solo limpiar el token propio, no todo el localStorage
+          localStorage.removeItem('cezeus-auth-token');
           sessionStorage.clear();
-          console.log("🧼 Sesión limpia lista.");
         }
       } catch (e) {
-        console.warn("Aviso de limpieza:", e.message);
+        // Silencioso en produccion
       }
     };
-
     clearSession();
     return () => { isMounted = false; };
   }, []);
@@ -42,10 +40,8 @@ const Login = () => {
     setSuccessMessage(null);
 
     try {
-      // LIMPIEZA DE CHOQUE: Antes de intentar el login, borramos cualquier rastro 
-      // para evitar el error de "Multiple GoTrueClient instances"
       await supabase.auth.signOut();
-      localStorage.removeItem('cezeus-auth-token'); 
+      localStorage.removeItem('cezeus-auth-token');
 
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
@@ -55,9 +51,7 @@ const Login = () => {
       if (authError) throw authError;
 
       if (data?.user) {
-        console.log("✅ Auth exitoso. UID:", data.user.id);
-        
-        // Verificamos el perfil en la tabla usuarios
+        // Verificar perfil en la tabla usuarios
         const { data: usuario, error: dbError } = await supabase
           .from('usuarios')
           .select('rol, primer_nombre')
@@ -65,15 +59,31 @@ const Login = () => {
           .maybeSingle();
 
         if (dbError) console.error("Error al buscar perfil:", dbError.message);
-        
-        console.log("🏆 Acceso concedido.");
-        // Redirigimos según el rol para evitar que se quede en blanco tras el F5
+
+        // NUEVO: registrar log de login exitoso
+        await registrarLog({
+          accion: 'LOGIN',
+          modulo: 'AUTENTICACION',
+          descripcion: `Inicio de sesion exitoso: ${data.user.email}`,
+          detalles: {
+            rol: usuario?.rol || 'desconocido',
+            navegador: navigator.userAgent.split(' ').slice(-1)[0]
+          }
+        });
+
         const destiny = usuario?.rol === 'ALUMNO' ? '/alumnos' : '/dashboard';
         navigate(destiny);
       }
 
     } catch (err) {
-      console.error("🛑 Error:", err.message);
+      // NUEVO: registrar log de login fallido
+      await registrarLog({
+        accion: 'LOGIN_FALLIDO',
+        modulo: 'AUTENTICACION',
+        descripcion: `Intento de acceso fallido para: ${email.trim().toLowerCase()}`,
+        detalles: { motivo: err.message }
+      }).catch(() => {}); // silencioso si falla el log
+
       const errorMessages = {
         'Invalid login credentials': 'El correo o la contraseña son incorrectos.',
         'Email not confirmed': 'Debes confirmar tu correo electrónico.',
@@ -124,9 +134,9 @@ const Login = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email</label>
-              <input 
+              <input
                 required
-                type="email" 
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700 text-sm"
@@ -137,9 +147,9 @@ const Login = () => {
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Contraseña</label>
               <div className="relative group">
-                <input 
+                <input
                   required
-                  type={showPassword ? "text" : "password"} 
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-slate-900/80 border border-white/5 rounded-2xl py-4 px-5 pr-12 text-white focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-700 text-sm"
@@ -165,7 +175,7 @@ const Login = () => {
               </div>
             )}
 
-            <button 
+            <button
               disabled={loading}
               type="submit"
               className="w-full bg-primary hover:bg-[#11d8d8] text-cezeus-dark font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 mt-2"
@@ -179,7 +189,7 @@ const Login = () => {
             </button>
           </form>
 
-          <button 
+          <button
             type="button"
             className="w-full mt-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors py-2"
             onClick={handleResetPassword}
