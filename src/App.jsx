@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
-
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import MainLayout from './layouts/MainLayout';
@@ -35,31 +34,31 @@ const RoutePreserver = () => {
 };
 
 function App() {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [legalText, setLegalText] = useState(null); // null = aún cargando, '' = cargado vacío
-  const isUserLoaded = useRef(false);
+  const [user, setUser]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [legalText, setLegalText] = useState(null); // null = aún no cargado
+  const isUserLoaded              = useRef(false);
 
   const canAccess = useCallback((page) => {
     if (!user) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // Carga del texto legal — null mientras carga, string cuando termina
-  useEffect(() => {
-    const fetchLegal = async () => {
-      try {
-        const { data } = await supabase
-          .from('configuraciones_club')
-          .select('descripcion')
-          .eq('nombre_tarifa', 'legal_consentimiento')
-          .maybeSingle();
-        setLegalText(data?.descripcion || 'Al continuar, aceptas los términos y condiciones de participación del Club Deportivo Cezeus.');
-      } catch {
-        setLegalText(''); // en caso de error, no bloquear
-      }
-    };
-    fetchLegal();
+  // CORREGIDO: fetchLegal ahora recibe la sesión activa para ejecutarse autenticado
+  const fetchLegal = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('configuraciones_club')
+        .select('descripcion')
+        .eq('nombre_tarifa', 'legal_consentimiento')
+        .maybeSingle();
+      setLegalText(
+        data?.descripcion ||
+        'Al continuar, aceptas los términos y condiciones de participación del Club Deportivo Cezeus.'
+      );
+    } catch {
+      setLegalText('Al continuar, aceptas los términos y condiciones de participación del Club Deportivo Cezeus.');
+    }
   }, []);
 
   useEffect(() => {
@@ -85,6 +84,7 @@ function App() {
           setUser(null);
           isUserLoaded.current = false;
           setLoading(false);
+          setLegalText(null);
         }
         return;
       }
@@ -109,9 +109,18 @@ function App() {
               rol: roleFromToken,
               acepta_terminos: false
             };
+
         setUser(finalUser);
         isUserLoaded.current = true;
         setLoading(false);
+
+        // CORREGIDO: cargar texto legal DESPUÉS de tener sesión activa
+        // Solo si el usuario NO ha aceptado los términos
+        if (!finalUser.acepta_terminos) {
+          fetchLegal();
+        } else {
+          setLegalText(''); // ya aceptó, no necesitamos el texto
+        }
       }
     };
 
@@ -119,26 +128,31 @@ function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          // CORREGIDO: siempre cargar el perfil al iniciar, incluye F5
           await updateUserData(session, true);
         } else {
-          if (isMounted) setLoading(false);
+          if (isMounted) {
+            setLoading(false);
+            setLegalText(''); // sin sesión, no mostrar modal
+          }
         }
       } catch {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setLegalText('');
+        }
       }
     };
 
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // CORREGIDO: manejar INITIAL_SESSION con y sin sesión
       if (event === 'INITIAL_SESSION') {
-        if (!session && isMounted) setLoading(false);
-        // Si hay sesión, initApp ya la manejó — no hacer nada para evitar doble carga
+        if (!session && isMounted) {
+          setLoading(false);
+          setLegalText('');
+        }
         return;
       }
-
       if (event === 'SIGNED_IN') {
         await updateUserData(session, true);
       } else if (event === 'TOKEN_REFRESHED') {
@@ -148,7 +162,7 @@ function App() {
           setUser(null);
           isUserLoaded.current = false;
           setLoading(false);
-          // CORREGIDO: limpiar la ruta guardada al cerrar sesión
+          setLegalText(null);
           sessionStorage.removeItem('last_route');
         }
       }
@@ -162,13 +176,12 @@ function App() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       isMounted = false;
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [fetchLegal]);
 
   if (loading) {
     return (
@@ -179,21 +192,12 @@ function App() {
     );
   }
 
-  const defaultPath  = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+  const defaultPath  = user?.rol === 'ALUMNO' ? '/alumnos' : '/calendario';
   const lastRoute    = sessionStorage.getItem('last_route');
   const redirectPath = lastRoute && user ? lastRoute : defaultPath;
 
-console.log('DEBUG TERMS:', {
-  user_id: user?.id,
-  acepta_terminos: user?.acepta_terminos,
-  tipo: typeof user?.acepta_terminos,
-  legalText: legalText,
-  legalText_es_null: legalText === null
-});
-
-  // CORREGIDO: mostrar TermsModal solo cuando legalText ya cargó (no null)
-  // y el usuario tiene acepta_terminos en false o null
-  const mostrarTerms = user && !user.acepta_terminos && legalText !== null;
+  // Mostrar modal cuando: hay usuario, no aceptó términos, y el texto ya cargó
+  const mostrarTerms = Boolean(user && !user.acepta_terminos && legalText);
 
   return (
     <>
@@ -203,45 +207,43 @@ console.log('DEBUG TERMS:', {
           <Routes>
             <Route path="/login"          element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-
             <Route path="/dashboard" element={
               user && canAccess(PaginasApp.DASHBOARD)
                 ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/notificaciones" element={
               user && canAccess(PaginasApp.NOTIFICACIONES)
                 ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/nosotros" element={
               user && canAccess(PaginasApp.NOSOTROS)
                 ? <MainLayout user={user}><Nosotros /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/alumnos" element={
               user && canAccess(PaginasApp.ALUMNOS)
                 ? <MainLayout user={user}><Alumnos /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/calendario" element={
               user && canAccess(PaginasApp.CALENDARIO)
                 ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/configuracion" element={
               user && canAccess(PaginasApp.CONFIGURACION)
                 ? <MainLayout user={user}><Configuracion user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             <Route path="/pagos" element={
               user && canAccess(PaginasApp.PAGOS)
                 ? <MainLayout user={user}><PagosModule user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : "/login"} replace />
+                : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
-
-            <Route path="/"  element={<Navigate to={user ? redirectPath : "/login"} replace />} />
-            <Route path="*"  element={<Navigate to={user ? redirectPath : "/login"} replace />} />
+            <Route path="/"  element={<Navigate to={user ? redirectPath : '/login'} replace />} />
+            <Route path="*"  element={<Navigate to={user ? redirectPath : '/login'} replace />} />
           </Routes>
         </Suspense>
       </Router>
@@ -253,7 +255,6 @@ console.log('DEBUG TERMS:', {
           onAccepted={() => setUser(prev => ({ ...prev, acepta_terminos: true }))}
         />
       )}
-
       <Analytics />
     </>
   );
