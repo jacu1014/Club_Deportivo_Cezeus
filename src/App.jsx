@@ -4,22 +4,19 @@ import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
 
-// Carga inmediata — siempre necesarios
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import MainLayout from './layouts/MainLayout';
 import TermsModal from './components/TermsModal';
 
-// Lazy loading — solo se cargan cuando el usuario navega a esa ruta
-const Alumnos          = lazy(() => import('./pages/Alumnos'));
-const Configuracion    = lazy(() => import('./pages/Configuracion'));
-const PagosModule      = lazy(() => import('./pages/PagosModule'));
-const CalendarioPage   = lazy(() => import('./pages/CalendarioPage'));
-const Nosotros         = lazy(() => import('./pages/Nosotros'));
-const DashboardPage    = lazy(() => import('./pages/DashboardPage'));
+const Alumnos            = lazy(() => import('./pages/Alumnos'));
+const Configuracion      = lazy(() => import('./pages/Configuracion'));
+const PagosModule        = lazy(() => import('./pages/PagosModule'));
+const CalendarioPage     = lazy(() => import('./pages/CalendarioPage'));
+const Nosotros           = lazy(() => import('./pages/Nosotros'));
+const DashboardPage      = lazy(() => import('./pages/DashboardPage'));
 const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage'));
 
-// Spinner reutilizable para Suspense
 const PageSpinner = () => (
   <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
     <div className="w-10 h-10 border-4 border-cyan-400/20 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
@@ -27,11 +24,9 @@ const PageSpinner = () => (
   </div>
 );
 
-// Componente que preserva la ruta actual en sessionStorage
 const RoutePreserver = () => {
   const location = useLocation();
   useEffect(() => {
-    // Guardar la ruta actual excepto login y reset-password
     if (!['/login', '/reset-password'].includes(location.pathname)) {
       sessionStorage.setItem('last_route', location.pathname);
     }
@@ -40,9 +35,9 @@ const RoutePreserver = () => {
 };
 
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [legalText, setLegalText] = useState('');
+  const [legalText, setLegalText] = useState(null); // null = aún cargando, '' = cargado vacío
   const isUserLoaded = useRef(false);
 
   const canAccess = useCallback((page) => {
@@ -50,7 +45,7 @@ function App() {
     return ROLE_PERMISSIONS[user.rol]?.includes(page);
   }, [user]);
 
-  // Carga de texto legal
+  // Carga del texto legal — null mientras carga, string cuando termina
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -59,9 +54,9 @@ function App() {
           .select('descripcion')
           .eq('nombre_tarifa', 'legal_consentimiento')
           .maybeSingle();
-        if (data) setLegalText(data.descripcion);
+        setLegalText(data?.descripcion || '');
       } catch {
-        // silencioso en produccion
+        setLegalText(''); // en caso de error, no bloquear
       }
     };
     fetchLegal();
@@ -124,6 +119,7 @@ function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          // CORREGIDO: siempre cargar el perfil al iniciar, incluye F5
           await updateUserData(session, true);
         } else {
           if (isMounted) setLoading(false);
@@ -136,15 +132,23 @@ function App() {
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION' && !session) {
-        if (isMounted) setLoading(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        await updateUserData(session, event === 'SIGNED_IN');
+      // CORREGIDO: manejar INITIAL_SESSION con y sin sesión
+      if (event === 'INITIAL_SESSION') {
+        if (!session && isMounted) setLoading(false);
+        // Si hay sesión, initApp ya la manejó — no hacer nada para evitar doble carga
+        return;
+      }
+
+      if (event === 'SIGNED_IN') {
+        await updateUserData(session, true);
+      } else if (event === 'TOKEN_REFRESHED') {
+        await updateUserData(session, false);
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
           isUserLoaded.current = false;
           setLoading(false);
+          // CORREGIDO: limpiar la ruta guardada al cerrar sesión
           sessionStorage.removeItem('last_route');
         }
       }
@@ -175,11 +179,13 @@ function App() {
     );
   }
 
-  const defaultPath = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
-
-  // CORREGIDO: preservar la última ruta visitada en el refresh
-  const lastRoute = sessionStorage.getItem('last_route');
+  const defaultPath  = user?.rol === 'ALUMNO' ? "/alumnos" : "/calendario";
+  const lastRoute    = sessionStorage.getItem('last_route');
   const redirectPath = lastRoute && user ? lastRoute : defaultPath;
+
+  // CORREGIDO: mostrar TermsModal solo cuando legalText ya cargó (no null)
+  // y el usuario tiene acepta_terminos en false o null
+  const mostrarTerms = user && !user.acepta_terminos && legalText !== null && legalText !== '';
 
   return (
     <>
@@ -187,10 +193,9 @@ function App() {
         <RoutePreserver />
         <Suspense fallback={<PageSpinner />}>
           <Routes>
-            <Route path="/login" element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
+            <Route path="/login"          element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            {/* Rutas Protegidas */}
             <Route path="/dashboard" element={
               user && canAccess(PaginasApp.DASHBOARD)
                 ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
@@ -227,20 +232,20 @@ function App() {
                 : <Navigate to={user ? defaultPath : "/login"} replace />
             } />
 
-            <Route path="/" element={<Navigate to={user ? redirectPath : "/login"} replace />} />
-            <Route path="*" element={<Navigate to={user ? redirectPath : "/login"} replace />} />
+            <Route path="/"  element={<Navigate to={user ? redirectPath : "/login"} replace />} />
+            <Route path="*"  element={<Navigate to={user ? redirectPath : "/login"} replace />} />
           </Routes>
         </Suspense>
       </Router>
 
-      {/* CORREGIDO: !user.acepta_terminos en lugar de === false (funciona con null y false) */}
-      {user && !user.acepta_terminos && legalText && (
+      {mostrarTerms && (
         <TermsModal
           user={user}
           content={legalText}
           onAccepted={() => setUser(prev => ({ ...prev, acepta_terminos: true }))}
         />
       )}
+
       <Analytics />
     </>
   );
