@@ -1,19 +1,29 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import ModalAsistencia from '../components/ModalAsistencia';
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
-import es from 'date-fns/locale/es'; // Importación estable para Vercel
-import { generarReporteAsistencia } from '../services/reporteAsistencia'; 
+import es from 'date-fns/locale/es';
+import { generarReporteAsistencia } from '../services/reporteAsistencia';
 import AttendanceChart from '../components/AttendanceChart';
+import { usePageLog } from '../hooks/usePageLog';
+import { registrarLog } from '../lib/activity';
 
 const DashboardPage = ({ user }) => {
   const [asistencias, setAsistencias] = useState([]);
-  const [categorias, setCategorias] = useState([]); 
+  const [categorias, setCategorias] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tipoSeleccionado, setTipoSeleccionado] = useState('ALUMNO');
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
-  
+
+  // MEJORA: estado controlado para el formulario PDF (reemplaza getElementById)
+  const [exportFiltros, setExportFiltros] = useState({
+    fechaInicio: format(new Date(), 'yyyy-MM-dd'),
+    fechaFin: format(new Date(), 'yyyy-MM-dd'),
+    categoria: 'TODAS',
+    rol: 'ALUMNO'
+  });
+
   const [rangoDashboard, setRangoDashboard] = useState({
     inicio: format(new Date(), 'yyyy-MM-dd'),
     fin: format(new Date(), 'yyyy-MM-dd')
@@ -21,12 +31,11 @@ const DashboardPage = ({ user }) => {
 
   const currentRole = user?.rol || 'ALUMNO';
 
-  useEffect(() => { 
-    fetchDatos();
-    fetchCategorias();
-  }, [rangoDashboard, currentRole]);
+  // NUEVO: log automático de visita a la página
+  usePageLog('DASHBOARD', { rol: currentRole });
 
-  const fetchCategorias = async () => {
+  // MEJORA: fetchCategorias separado con deps independientes
+  const fetchCategorias = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('usuarios')
@@ -37,15 +46,14 @@ const DashboardPage = ({ user }) => {
       const unicas = [...new Set(data.map(u => u.categoria))].sort();
       setCategorias(unicas);
     } catch (err) {
-      console.error("Error categorías:", err.message);
+      // silencioso en produccion
     }
-  };
+  }, []);
 
-  const fetchDatos = async () => {
+  const fetchDatos = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase.from('asistencias').select('*, usuarios(*)');
-
       if (['ALUMNO', 'ENTRENADOR'].includes(currentRole)) {
         const inicioMes = startOfMonth(new Date()).toISOString().split('T')[0];
         const finMes = endOfMonth(new Date()).toISOString().split('T')[0];
@@ -53,36 +61,50 @@ const DashboardPage = ({ user }) => {
       } else {
         query = query.gte('fecha', rangoDashboard.inicio).lte('fecha', rangoDashboard.fin);
       }
-
       const { data, error } = await query.order('fecha', { ascending: false });
       if (error) throw error;
       setAsistencias(data || []);
     } catch (err) {
-      console.error("Error Fetch Dashboard:", err.message);
+      // silencioso en produccion
     } finally {
       setLoading(false);
     }
-  };
+  }, [rangoDashboard, currentRole, user.id]);
+
+  // MEJORA: efectos separados con dependencias correctas
+  useEffect(() => { fetchDatos(); }, [fetchDatos]);
+  useEffect(() => { fetchCategorias(); }, [fetchCategorias]);
 
   const handleExportarPDF = async () => {
-    const fInicio = document.getElementById('fecha_inicio').value;
-    const fFin = document.getElementById('fecha_fin').value;
-    const catFiltro = document.getElementById('filtro_categoria_pdf').value;
-    const rolFiltro = document.getElementById('filtro_rol_pdf')?.value || 'ALUMNO';
+    const { fechaInicio, fechaFin, categoria, rol } = exportFiltros;
 
-    if (!fInicio || !fFin) return alert("Selecciona fechas.");
+    // MEJORA: reemplaza alert() por validacion silenciosa con estado
+    if (!fechaInicio || !fechaFin) {
+      setToastMsg('Debes seleccionar un rango de fechas');
+      return;
+    }
+
     setExportLoading(true);
     try {
-      let query = supabase.from('asistencias').select(`fecha, estado, usuarios!inner(*)`).gte('fecha', fInicio).lte('fecha', fFin);
-      if (rolFiltro === 'ALUMNO') {
+      let query = supabase
+        .from('asistencias')
+        .select('fecha, estado, usuarios!inner(*)')
+        .gte('fecha', fechaInicio)
+        .lte('fecha', fechaFin);
+
+      if (rol === 'ALUMNO') {
         query = query.eq('usuarios.rol', 'ALUMNO');
-        if (catFiltro !== 'TODAS') query = query.eq('usuarios.categoria', catFiltro);
+        if (categoria !== 'TODAS') query = query.eq('usuarios.categoria', categoria);
       } else {
         query = query.neq('usuarios.rol', 'ALUMNO');
       }
+
       const { data: raw, error } = await query.order('fecha', { ascending: true });
       if (error) throw error;
-      if (!raw?.length) return alert("Sin datos.");
+      if (!raw?.length) {
+        setToastMsg('No hay datos para el rango seleccionado');
+        return;
+      }
 
       const fechasUnicas = [...new Set(raw.map(a => a.fecha))].sort();
       const mapaRegistros = {};
@@ -92,18 +114,44 @@ const DashboardPage = ({ user }) => {
         mapaRegistros[nombre].asistencias[reg.fecha] = reg.estado;
       });
 
-      const subtitulo = rolFiltro === 'ALUMNO' ? (catFiltro === 'TODAS' ? "Alumnos" : `Cat. ${catFiltro}`) : "Staff";
-      await generarReporteAsistencia(`${subtitulo} (${fInicio} / ${fFin})`, Object.values(mapaRegistros), fechasUnicas);
+      const subtitulo = rol === 'ALUMNO'
+        ? (categoria === 'TODAS' ? "Alumnos" : `Cat. ${categoria}`)
+        : "Staff";
+
+      await generarReporteAsistencia(
+        `${subtitulo} (${fechaInicio} / ${fechaFin})`,
+        Object.values(mapaRegistros),
+        fechasUnicas
+      );
+
+      // NUEVO: log de exportacion PDF
+      await registrarLog({
+        accion: 'EXPORTAR_PDF',
+        modulo: 'DASHBOARD',
+        descripcion: `Reporte de asistencia exportado`,
+        detalles: { fecha_inicio: fechaInicio, fecha_fin: fechaFin, categoria, tipo: rol }
+      });
+
     } catch (err) {
-      alert(err.message);
+      setToastMsg(err.message || 'Error al generar el reporte');
     } finally {
       setExportLoading(false);
     }
   };
 
+  // Toast simple para reemplazar alert()
+  const [toastMsg, setToastMsg] = useState(null);
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = setTimeout(() => setToastMsg(null), 3500);
+    return () => clearTimeout(t);
+  }, [toastMsg]);
+
   const stats = useMemo(() => {
     const alumnos = asistencias.filter(a => a.usuarios?.rol === 'ALUMNO');
-    const staff = asistencias.filter(a => ['ADMINISTRATIVO', 'ENTRENADOR', 'DIRECTOR', 'SUPER_ADMIN'].includes(a.usuarios?.rol));
+    const staff = asistencias.filter(a =>
+      ['ADMINISTRATIVO', 'ENTRENADOR', 'DIRECTOR', 'SUPER_ADMIN'].includes(a.usuarios?.rol)
+    );
     return {
       alumnosPres: alumnos.filter(a => a.estado === 'PRESENTE').length,
       staffPres: staff.filter(a => a.estado === 'PRESENTE').length,
@@ -113,35 +161,41 @@ const DashboardPage = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-[#05080d] text-slate-200 p-4 md:p-8">
+
+      {/* Toast (reemplaza alert) */}
+      {toastMsg && (
+        <div className="fixed top-6 right-6 z-[100] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-in slide-in-from-right duration-300">
+          {toastMsg}
+        </div>
+      )}
+
       <div className="max-w-[1400px] mx-auto space-y-8 md:space-y-12">
-        
+
         {/* HEADER */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-white/5 pb-8">
           <div className="space-y-2">
             <h2 className="text-white font-black text-3xl md:text-5xl uppercase italic tracking-tighter leading-none">
               {['ALUMNO', 'ENTRENADOR'].includes(currentRole) ? 'Mi' : 'Panel'} <span className="text-cyan-400">Cezeus</span>
             </h2>
-            
             {!['ALUMNO', 'ENTRENADOR'].includes(currentRole) && (
               <div className="flex flex-wrap items-center gap-3 bg-white/5 p-2 rounded-xl border border-white/5 w-fit">
                 <span className="text-[9px] font-black text-slate-500 uppercase px-2">Rango Visual:</span>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={rangoDashboard.inicio}
-                  onChange={(e) => setRangoDashboard(p => ({...p, inicio: e.target.value}))}
+                  onChange={(e) => setRangoDashboard(p => ({ ...p, inicio: e.target.value }))}
                   className="bg-transparent text-cyan-400 text-[11px] font-bold outline-none"
                 />
                 <span className="text-slate-700 font-bold">→</span>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={rangoDashboard.fin}
-                  onChange={(e) => setRangoDashboard(p => ({...p, fin: e.target.value}))}
+                  onChange={(e) => setRangoDashboard(p => ({ ...p, fin: e.target.value }))}
                   className="bg-transparent text-cyan-400 text-[11px] font-bold outline-none"
                 />
               </div>
             )}
           </div>
-          
           <button onClick={fetchDatos} className="p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-cyan-400/10 transition-all group shrink-0">
             <span className={`material-symbols-outlined text-cyan-400 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`}>refresh</span>
           </button>
@@ -150,51 +204,72 @@ const DashboardPage = ({ user }) => {
         {/* CONTENIDO PRINCIPAL */}
         {['SUPER_ADMIN', 'DIRECTOR', 'ADMINISTRATIVO'].includes(currentRole) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            <DashboardCard 
-              title="Alumnos" 
-              count={stats.alumnosPres} 
-              label="En Rango" 
-              icon="groups" 
-              color="text-cyan-400" 
-              btnText="Pasar/Editar" 
-              onBtnClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} 
+
+            <DashboardCard
+              title="Alumnos"
+              count={stats.alumnosPres}
+              label="En Rango"
+              icon="groups"
+              color="text-cyan-400"
+              btnText="Pasar/Editar"
+              onBtnClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }}
+            />
+            <DashboardCard
+              title="Staff"
+              count={stats.staffPres}
+              label="En Rango"
+              icon="badge"
+              color="text-emerald-400"
+              btnText="Gestionar"
+              onBtnClick={() => { setTipoSeleccionado('STAFF'); setIsModalOpen(true); }}
             />
 
-            <DashboardCard 
-              title="Staff" 
-              count={stats.staffPres} 
-              label="En Rango" 
-              icon="badge" 
-              color="text-emerald-400" 
-              btnText="Gestionar" 
-              onBtnClick={() => { setTipoSeleccionado('STAFF'); setIsModalOpen(true); }} 
-            />
-
+            {/* CARD EXPORTAR PDF - MEJORA: estado controlado, sin getElementById */}
             <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between min-h-[320px]">
               <div>
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 italic">Exportar Reporte PDF</p>
                 <div className="space-y-3">
-                  <select id="filtro_rol_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
+                  <select
+                    value={exportFiltros.rol}
+                    onChange={(e) => setExportFiltros(p => ({ ...p, rol: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none"
+                  >
                     <option value="ALUMNO">ALUMNOS</option>
                     <option value="STAFF">TODO EL STAFF</option>
                   </select>
-                  <select id="filtro_categoria_pdf" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none">
+                  <select
+                    value={exportFiltros.categoria}
+                    onChange={(e) => setExportFiltros(p => ({ ...p, categoria: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-bold uppercase focus:border-cyan-400 outline-none"
+                  >
                     <option value="TODAS">CATEGORÍAS</option>
                     {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                   <div className="flex gap-2">
-                    <input type="date" id="fecha_inicio" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.inicio}/>
-                    <input type="date" id="fecha_fin" className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold" defaultValue={rangoDashboard.fin}/>
+                    <input
+                      type="date"
+                      value={exportFiltros.fechaInicio}
+                      onChange={(e) => setExportFiltros(p => ({ ...p, fechaInicio: e.target.value }))}
+                      className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold"
+                    />
+                    <input
+                      type="date"
+                      value={exportFiltros.fechaFin}
+                      onChange={(e) => setExportFiltros(p => ({ ...p, fechaFin: e.target.value }))}
+                      className="w-1/2 bg-white/5 border border-white/10 rounded-xl p-2 text-[10px] text-white font-bold"
+                    />
                   </div>
                 </div>
               </div>
-              <button onClick={handleExportarPDF} disabled={exportLoading} className="w-full mt-6 bg-emerald-500 text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all">
+              <button
+                onClick={handleExportarPDF}
+                disabled={exportLoading}
+                className="w-full mt-6 bg-emerald-500 text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all disabled:opacity-50"
+              >
                 {exportLoading ? 'Procesando...' : 'Generar PDF'}
               </button>
             </div>
 
-            {/* SECCIÓN INFERIOR DISTRIBUIDA CORRECTAMENTE */}
             <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3 bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl flex flex-col justify-between">
                 <div>
@@ -205,19 +280,21 @@ const DashboardPage = ({ user }) => {
                 </div>
                 <AttendanceChart asistencias={asistencias} />
               </div>
-
               <div className="lg:col-span-1">
                 <RecentActivity asistencias={asistencias} />
               </div>
             </div>
-            
+
           </div>
         ) : (
           /* VISTA ENTRENADOR / ALUMNO */
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {currentRole === 'ENTRENADOR' && (
-                <button onClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }} className="h-48 bg-gradient-to-br from-cyan-400 to-blue-600 text-black rounded-[2.5rem] font-black uppercase italic text-2xl flex flex-col items-center justify-center gap-3 hover:scale-[1.01] transition-all shadow-2xl shadow-cyan-500/20">
+                <button
+                  onClick={() => { setTipoSeleccionado('ALUMNO'); setIsModalOpen(true); }}
+                  className="h-48 bg-gradient-to-br from-cyan-400 to-blue-600 text-black rounded-[2.5rem] font-black uppercase italic text-2xl flex flex-col items-center justify-center gap-3 hover:scale-[1.01] transition-all shadow-2xl shadow-cyan-500/20"
+                >
                   <span className="material-symbols-outlined text-6xl">inventory</span>
                   Pasar Asistencia Hoy
                 </button>
@@ -227,7 +304,6 @@ const DashboardPage = ({ user }) => {
                 <h3 className="text-7xl font-black text-white">{stats.misAsistencias} <span className="text-xl text-slate-500 uppercase">Días</span></h3>
               </div>
             </div>
-            
             <div className="bg-[#0a0f18]/60 border border-white/5 rounded-[2.5rem] overflow-hidden">
               <div className="p-6 bg-white/[0.02] border-b border-white/5">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Historial Reciente</p>
@@ -246,12 +322,12 @@ const DashboardPage = ({ user }) => {
           </div>
         )}
 
-        <ModalAsistencia 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
+        <ModalAsistencia
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
           tipo={tipoSeleccionado}
-          fechaInicial={rangoDashboard.inicio} 
-          onSaveSuccess={fetchDatos} 
+          fechaInicial={rangoDashboard.inicio}
+          onSaveSuccess={fetchDatos}
         />
       </div>
     </div>
@@ -259,7 +335,6 @@ const DashboardPage = ({ user }) => {
 };
 
 /* --- COMPONENTES AUXILIARES --- */
-
 const DashboardCard = ({ title, count, label, icon, color, btnText, onBtnClick }) => (
   <div className="bg-[#0a0f18]/60 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-xl relative group overflow-hidden flex flex-col justify-between min-h-[320px]">
     <div className={`absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity ${color}`}>
