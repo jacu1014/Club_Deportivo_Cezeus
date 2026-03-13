@@ -183,6 +183,14 @@ function App() {
   const lastRoute    = sessionStorage.getItem('last_route');
   const redirectPath = lastRoute && user ? lastRoute : defaultPath;
 
+console.log('DEBUG TERMS:', {
+  user_id: user?.id,
+  acepta_terminos: user?.acepta_terminos,
+  tipo: typeof user?.acepta_terminos,
+  legalText: legalText,
+  legalText_es_null: legalText === null
+});
+
   // CORREGIDO: mostrar TermsModal solo cuando legalText ya cargó (no null)
   // y el usuario tiene acepta_terminos en false o null
   const mostrarTerms = user && !user.acepta_terminos && legalText !== null;
