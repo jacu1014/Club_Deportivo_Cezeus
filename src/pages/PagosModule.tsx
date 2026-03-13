@@ -1,32 +1,83 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORIAS_FINANZAS } from '../constants/data';
-
-// Importación de subcomponentes
 import FinanceDashboard from '../components/FinanceDashboard';
 import FinanceTable from '../components/FinanceTable';
 import ModalNuevoPago from '../components/ModalNuevoPago';
+import { usePageLog } from '../hooks/usePageLog';
+import { registrarLog } from '../lib/activity';
 
-const PagosModule = ({ user }: { user: any }) => {
-  const [datos, setDatos] = useState<any[]>([]);
+// MEJORA: interfaces definidas, sin 'any'
+interface Usuario {
+  id: string;
+  numero_documento: string;
+  primer_nombre: string;
+  segundo_nombre?: string;
+  primer_apellido: string;
+  segundo_apellido?: string;
+  rol: string;
+}
+
+interface Proveedor {
+  id: string;
+  nombre_proveedor: string;
+  nit_cc: string;
+}
+
+interface PagoMovimiento {
+  id: string;
+  fecha_pago: string;
+  concepto: string;
+  monto: number;
+  estado_pago: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
+  metodo_pago: string;
+  categoria: string;
+  usuario_id?: string;
+  usuarios?: Usuario;
+  proveedores?: Proveedor;
+}
+
+interface Filtros {
+  busqueda: string;
+  fechaEspecifica: string;
+  mes: number | null;
+  anio: number | null;
+  categoria: string | null;
+  estado: string | null;
+  metodo: string | null;
+  tipo: string | null;
+}
+
+interface PagosModuleProps {
+  user: {
+    id: string;
+    rol?: string;
+    user_metadata?: { rol?: string };
+  };
+}
+
+const PagosModule = ({ user }: PagosModuleProps) => {
+  const [datos, setDatos] = useState<PagoMovimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostrarModal, setMostrarModal] = useState(false);
-  const [pagoAEditar, setPagoAEditar] = useState<any | null>(null);
-  const [toasts, setToasts] = useState<any[]>([]);
+  const [pagoAEditar, setPagoAEditar] = useState<PagoMovimiento | null>(null);
+  const [toasts, setToasts] = useState<{ id: number; mensaje: string; tipo: 'success' | 'error' }[]>([]);
 
-  const [filtros, setFiltros] = useState({
+  const [filtros, setFiltros] = useState<Filtros>({
     busqueda: '',
     fechaEspecifica: '',
     mes: null,
     anio: new Date().getFullYear(),
-    categoria: null as string | null,
-    estado: null as string | null,
-    metodo: null as string | null,
-    tipo: null as string | null
+    categoria: null,
+    estado: null,
+    metodo: null,
+    tipo: null
   });
 
-  // ACTUALIZACIÓN: Priorizamos el rol de los metadatos sincronizados
-  const userRol = user?.user_metadata?.rol || user?.rol;
+  const userRol = user?.user_metadata?.rol || user?.rol || '';
+
+  // NUEVO: log automático de visita
+  usePageLog('PAGOS', { rol: userRol });
 
   const mostrarToast = useCallback((mensaje: string, tipo: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -59,8 +110,6 @@ const PagosModule = ({ user }: { user: any }) => {
       const { data, error } = await query.order('fecha_pago', { ascending: false });
       
       if (error) {
-        // Si detectamos error de RLS (recursión), lo notificamos pero quitamos el loading
-        console.error("Error en query Pagos:", error.message);
         if (error.message.includes('recursion')) {
           mostrarToast('Error de acceso a perfiles (RLS)', 'error');
         } else {
@@ -69,17 +118,15 @@ const PagosModule = ({ user }: { user: any }) => {
         return;
       }
 
-      if (data) setDatos(data);
-    } catch (error) {
+      if (data) setDatos(data as PagoMovimiento[]);
+    } catch {
       mostrarToast('Error inesperado de red', 'error');
     } finally {
       setLoading(false);
     }
   }, [user, userRol, mostrarToast]);
 
-  useEffect(() => {
-    cargarCaja();
-  }, [cargarCaja]);
+  useEffect(() => { cargarCaja(); }, [cargarCaja]);
 
   const datosFiltrados = useMemo(() => {
     return datos.filter(d => {
@@ -100,13 +147,13 @@ const PagosModule = ({ user }: { user: any }) => {
       const coincideTipo = !filtros.tipo || tipoReal === filtros.tipo;
 
       const term = filtros.busqueda.toLowerCase().trim();
-      
       const u = d.usuarios;
       const p = d.proveedores;
       
-      const nombreUsuario = u ? [u.primer_nombre, u.segundo_nombre, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(' ') : '';
+      const nombreUsuario = u
+        ? [u.primer_nombre, u.segundo_nombre, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(' ')
+        : '';
       const nombreProveedor = p ? p.nombre_proveedor : '';
-      
       const docUsuario = u?.numero_documento || '';
       const nitProveedor = p?.nit_cc || '';
 
@@ -117,13 +164,26 @@ const PagosModule = ({ user }: { user: any }) => {
         nitProveedor.toLowerCase().includes(term) ||
         (d.concepto || '').toLowerCase().includes(term);
 
-      return coincideFecha && coincideMes && coincideAnio && coincideCat && coincideEstado && coincideMetodo && coincideTipo && coincideBusqueda;
+      return coincideFecha && coincideMes && coincideAnio && coincideCat &&
+             coincideEstado && coincideMetodo && coincideTipo && coincideBusqueda;
     });
   }, [datos, filtros]);
 
-  const handleAbrirEdicion = (movimiento: any) => {
+  // NUEVO: log al abrir detalle de un movimiento
+  const handleAbrirEdicion = async (movimiento: PagoMovimiento) => {
     setPagoAEditar(movimiento);
     setMostrarModal(true);
+
+    await registrarLog({
+      accion: 'VER_MOVIMIENTO',
+      modulo: 'PAGOS',
+      descripcion: `Usuario consultó movimiento: ${movimiento.concepto || movimiento.id}`,
+      detalles: {
+        id_movimiento: movimiento.id,
+        monto: movimiento.monto,
+        estado: movimiento.estado_pago
+      }
+    });
   };
 
   const handleCerrarModal = () => {
@@ -137,8 +197,16 @@ const PagosModule = ({ user }: { user: any }) => {
       {/* TOASTS */}
       <div className="fixed top-4 right-4 left-4 md:left-auto md:top-6 md:right-6 z-[100] space-y-3">
         {toasts.map(t => (
-          <div key={t.id} className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300 ${t.tipo === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-            <span className="material-symbols-outlined text-sm md:text-base">{t.tipo === 'success' ? 'check_circle' : 'error'}</span>
+          <div
+            key={t.id}
+            className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300
+              ${t.tipo === 'success'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
+          >
+            <span className="material-symbols-outlined text-sm md:text-base">
+              {t.tipo === 'success' ? 'check_circle' : 'error'}
+            </span>
             <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">{t.mensaje}</span>
           </div>
         ))}
@@ -150,10 +218,9 @@ const PagosModule = ({ user }: { user: any }) => {
           <h1 className="text-2xl md:text-3xl font-black italic tracking-tighter text-primary uppercase">PAGOS</h1>
           <p className="text-slate-500 text-[8px] md:text-[10px] font-bold tracking-[0.3em] uppercase">Gestión de flujos y estados</p>
         </div>
-        
         {['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(userRol) && (
-          <button 
-            onClick={() => { setPagoAEditar(null); setMostrarModal(true); }} 
+          <button
+            onClick={() => { setPagoAEditar(null); setMostrarModal(true); }}
             className="w-full sm:w-auto bg-primary text-black px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg flex justify-center items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm md:text-base">add_circle</span> Nuevo Movimiento
@@ -161,30 +228,29 @@ const PagosModule = ({ user }: { user: any }) => {
         )}
       </div>
 
-      {/* MEJORA: Evitar renderizar el Dashboard si no hay datos o hay carga */}
       {!loading && datosFiltrados.length > 0 ? (
         <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
       ) : !loading && (
         <div className="bg-slate-900/40 p-10 rounded-3xl border border-white/5 flex flex-col items-center justify-center text-center">
-           <span className="material-symbols-outlined text-slate-700 text-4xl mb-2">query_stats</span>
-           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sin datos para visualizar gráficos</p>
+          <span className="material-symbols-outlined text-slate-700 text-4xl mb-2">query_stats</span>
+          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sin datos para visualizar gráficos</p>
         </div>
       )}
 
-      <FinanceTable 
+      <FinanceTable
         datosOriginales={datos}
-        datosFiltrados={datosFiltrados} 
+        datosFiltrados={datosFiltrados}
         filtros={filtros}
         setFiltros={setFiltros}
-        userRol={userRol} 
-        onUpdate={cargarCaja} 
+        userRol={userRol}
+        onUpdate={cargarCaja}
         onEdit={handleAbrirEdicion}
         mostrarToast={mostrarToast}
       />
 
-      <ModalNuevoPago 
-        isOpen={mostrarModal} 
-        onClose={handleCerrarModal} 
+      <ModalNuevoPago
+        isOpen={mostrarModal}
+        onClose={handleCerrarModal}
         onSuccess={cargarCaja}
         editData={pagoAEditar}
       />
