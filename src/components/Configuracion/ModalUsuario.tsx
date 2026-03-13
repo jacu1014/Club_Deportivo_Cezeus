@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Usuario, RolUsuario } from '../../types';
-import { supabaseAdmin } from '../../lib/supabaseAdmin'; 
+import { adminAction } from '../../lib/supabaseAdmin';
+import { supabase } from '../../lib/supabaseClient';
 import { registrarLog } from '../../lib/activity';
 import { 
   EPS_COLOMBIA, 
@@ -43,6 +44,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
     setTimeout(() => setMensaje(null), 5000);
   };
   
+  // CORREGIDO: usa supabase (cliente normal) en lugar de supabaseAdmin
   const borrarFotoAntigua = async (urlAntigua: string | null) => {
     if (!urlAntigua) return;
     try {
@@ -50,7 +52,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       const partes = urlSinParams.split('Fotos_Administrativos/');
       if (partes.length > 1) {
         const filePathParaBorrar = partes[1];
-        const { error } = await supabaseAdmin.storage
+        const { error } = await supabase.storage
           .from('Fotos_Administrativos')
           .remove([filePathParaBorrar]);
         if (error) console.error("Error al borrar foto antigua:", error.message);
@@ -63,7 +65,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
   const ejecutarProcesoStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
-
     setLoading(true);
     setStatusText(usuarioAEditar ? 'Sincronizando...' : 'Creando credenciales...');
     
@@ -76,7 +77,8 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
 
     try {
       if (!usuarioAEditar) {
-        const { data: check } = await supabaseAdmin
+        // CORREGIDO: verificacion con cliente normal (no necesita admin)
+        const { data: check } = await supabase
           .from('usuarios')
           .select('id')
           .or(`numero_documento.eq.${numDoc},email.eq.${email}`)
@@ -84,15 +86,15 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
 
         if (check) throw new Error("Documento o correo ya registrados.");
 
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        // CORREGIDO: crear usuario via Edge Function
+        const result = await adminAction('crear-usuario', {
           email: email!,
           password: formData.get('password')?.toString(),
-          email_confirm: true,
           user_metadata: { role: formData.get('rol') }
         });
 
-        if (authError) throw authError;
-        authUserId = authData.user?.id;
+        if (result?.error) throw result.error;
+        authUserId = result?.data?.user?.id;
       }
 
       let publicUrlFinal = usuarioAEditar?.foto_url || null; 
@@ -103,12 +105,12 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         if (usuarioAEditar?.foto_url) {
           await borrarFotoAntigua(usuarioAEditar.foto_url);
         }
-
         const fileExt = fotoArchivo.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `staff/${authUserId}/${fileName}`;
 
-        const { error: upError } = await supabaseAdmin.storage
+        // CORREGIDO: storage con cliente normal
+        const { error: upError } = await supabase.storage
           .from('Fotos_Administrativos')
           .upload(filePath, fotoArchivo, {
             contentType: fotoArchivo.type,
@@ -117,7 +119,7 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
           });
         
         if (!upError) {
-          const { data } = supabaseAdmin.storage
+          const { data } = supabase.storage
             .from('Fotos_Administrativos')
             .getPublicUrl(filePath);
           publicUrlFinal = `${data.publicUrl}?t=${Date.now()}`;
@@ -149,13 +151,12 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
         foto_url: publicUrlFinal 
       };
 
-      const { error: dbError } = await supabaseAdmin
+      // CORREGIDO: upsert con cliente normal
+      const { error: dbError } = await supabase
         .from('usuarios')
         .upsert(payload, { onConflict: 'id' });
-
       if (dbError) throw dbError;
 
-      // --- LOG ACTUALIZADO ---
       await registrarLog({
         accion: usuarioAEditar ? 'ACTUALIZACION_STAFF' : 'REGISTRO_STAFF',
         modulo: 'NOMINA',
@@ -168,15 +169,12 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
       });
 
       mostrarMensaje("✨ Proceso completado exitosamente", "success");
-      
-      setTimeout(() => {
-        onSave();
-        onClose();
-      }, 1000);
+      setTimeout(() => { onSave(); onClose(); }, 1000);
 
     } catch (err: any) {
+      // CORREGIDO: rollback via Edge Function
       if (!usuarioAEditar && authUserId) {
-        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+        await adminAction('eliminar-usuario', { userId: authUserId });
       }
       mostrarMensaje(err.message || "Error al procesar el registro", "error");
     } finally {
@@ -238,7 +236,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
             <section className="bg-slate-900/40 border border-white/10 rounded-[2rem] p-6 space-y-4">
                 <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] italic text-primary">Acceso</h3>
                 <Input name="email" type="email" label="Correo Institucional" defaultValue={usuarioAEditar?.email} required disabled={!!usuarioAEditar} />
-                
                 {!usuarioAEditar && (
                   <Input 
                     name="password" 
@@ -250,7 +247,6 @@ export const ModalUsuario: React.FC<ModalUsuarioProps> = ({ isOpen, onClose, onS
                     togglePassword={() => setShowPassword(!showPassword)}
                   />
                 )}
-
                 <Select 
                   name="rol" 
                   label="Rol" 

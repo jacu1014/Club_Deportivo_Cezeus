@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { User, Usuario } from '../types';
 import { supabase } from '../lib/supabaseClient';
-import { supabaseAdmin } from '../lib/supabaseAdmin';
-
+import { adminAction } from '../lib/supabaseAdmin'; // CORREGIDO: ruta correcta
+import { registrarLog } from '../lib/activity';
 // --- COMPONENTES ---
 import { PerfilSection } from '../components/Configuracion/PerfilSection';
 import { StaffSection } from '../components/Configuracion/StaffSection';
 import { ClubSection } from '../components/Configuracion/ClubSection';
 import { SeguridadSection } from '../components/Configuracion/SeguridadSection';
-import { ActividadSection } from '../components/Configuracion/ActividadSection'; // NUEVO IMPORT
+import { ActividadSection } from '../components/Configuracion/ActividadSection';
 import { TabButton } from '../components/Configuracion/ConfigUI';
 import { ModalUsuario } from '../components/Configuracion/ModalUsuario';
 
@@ -17,19 +17,15 @@ interface ConfiguracionProps {
 }
 
 const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
-  // 1. Actualizamos el tipo de activeTab para incluir 'actividad'
   const [activeTab, setActiveTab] = useState<'perfil' | 'club' | 'staff' | 'seguridad' | 'actividad'>('perfil');
   const [staff, setStaff] = useState<Usuario[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
-  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
 
   const currentRole = user?.rol || '';
   const canManageClub = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
   const canSeeStaff = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(currentRole);
-  
-  // 2. Definimos permiso para ver logs de actividad
   const canSeeActivity = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
 
   const fetchStaff = async () => {
@@ -39,7 +35,6 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
         .from('usuarios')
         .select('*')
         .order('primer_nombre', { ascending: true });
-
       if (error) throw error;
       setStaff(data || []);
     } catch (err: any) {
@@ -70,11 +65,21 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
     if (window.confirm(`¿Estás seguro de eliminar permanentemente a ${nombre}?`)) {
       try {
         setLoadingStaff(true);
-        const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(id);
-        if (authErr) throw authErr;
 
+        // CORREGIDO: eliminar auth via Edge Function
+        await adminAction('eliminar-usuario', { userId: id });
+
+        // Eliminar de la tabla usuarios
         const { error: dbErr } = await supabase.from('usuarios').delete().eq('id', id);
         if (dbErr) throw dbErr;
+
+        // NUEVO: registrar log de eliminación
+        await registrarLog({
+          accion: 'ELIMINAR_USUARIO',
+          modulo: 'NOMINA',
+          descripcion: `Usuario eliminado: ${nombre}`,
+          detalles: { id_eliminado: id }
+        });
 
         alert("Usuario eliminado correctamente.");
         fetchStaff();
@@ -119,18 +124,14 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
         {canManageClub && (
           <TabButton active={activeTab === 'club'} onClick={() => setActiveTab('club')} icon="stadium" label="Gestión Club" />
         )}
-        
-        {/* 3. Agregamos el botón de la nueva pestaña si tiene permiso */}
         {canSeeActivity && (
           <TabButton active={activeTab === 'actividad'} onClick={() => setActiveTab('actividad')} icon="history" label="Actividad" />
         )}
-
         <TabButton active={activeTab === 'seguridad'} onClick={() => setActiveTab('seguridad')} icon="lock" label="Seguridad" />
       </div>
 
       <div className="grid grid-cols-1 gap-8 pt-4">
         {activeTab === 'perfil' && <PerfilSection user={user} />}
-        
         {activeTab === 'staff' && canSeeStaff && (
           <div className="space-y-4">
             <div className="flex justify-end">
@@ -154,16 +155,12 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
             />
           </div>
         )}
-
         {activeTab === 'club' && canManageClub && (
           <ClubSection staff={staff} />
         )}
-
-        {/* 4. Renderizamos la nueva sección de Actividad */}
         {activeTab === 'actividad' && canSeeActivity && (
           <ActividadSection />
         )}
-
         {activeTab === 'seguridad' && <SeguridadSection />}
       </div>
 

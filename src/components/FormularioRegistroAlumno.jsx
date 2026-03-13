@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { supabaseAdmin } from '../lib/supabaseAdmin'; 
+import { supabase } from '../lib/supabaseClient';
+import { adminAction } from '../lib/supabaseAdmin';
 import { registrarLog } from '../lib/activity';
 import { 
   EPS_COLOMBIA, 
@@ -64,15 +65,18 @@ const FormularioRegistroAlumno = () => {
     const emailNormalizado = formData.get('email')?.toLowerCase().trim();
 
     try {
-      const [checkRes, authRes] = await Promise.all([
-        supabaseAdmin.from('usuarios').select('id').or(`numero_documento.eq.${numDoc},email.eq.${emailNormalizado}`).maybeSingle(),
-        supabaseAdmin.auth.admin.createUser({
-          email: emailNormalizado,
-          password: formData.get('password'),
-          email_confirm: true,
-          user_metadata: { role: 'ALUMNO' }
-        })
-      ]);
+      const checkRes = await supabase
+        .from('usuarios')
+        .select('id')
+        .or(`numero_documento.eq.${numDoc},email.eq.${emailNormalizado}`)
+        .maybeSingle();
+
+      // Crear usuario auth via Edge Function (reemplaza supabaseAdmin)
+      const authRes = await adminAction('crear-usuario', {
+        email: emailNormalizado,
+        password: formData.get('password'),
+        user_metadata: { role: 'ALUMNO' }
+      });
 
       if (checkRes.data) throw new Error("El documento o correo ya están registrados.");
       if (authRes.error) throw authRes.error;
@@ -83,12 +87,12 @@ const FormularioRegistroAlumno = () => {
       let publicUrlFinal = null;
       const fotoArchivo = fileInputRef.current?.files?.[0];
       
-      if (fotoArchivo && userIdParaRollback) {
+     if (fotoArchivo && userIdParaRollback) {
         const filePath = `${userIdParaRollback}/${Date.now()}_foto`;
-        const { error: upError } = await supabaseAdmin.storage.from('Fotos_Alumnos').upload(filePath, fotoArchivo);
+        const { error: upError } = await supabase.storage.from('Fotos_Alumnos').upload(filePath, fotoArchivo);
         
         if (!upError) {
-          publicUrlFinal = supabaseAdmin.storage.from('Fotos_Alumnos').getPublicUrl(filePath).data.publicUrl;
+          publicUrlFinal = supabase.storage.from('Fotos_Alumnos').getPublicUrl(filePath).data.publicUrl;
         }
       }
 
@@ -124,34 +128,38 @@ const FormularioRegistroAlumno = () => {
         acudiente_telefono: contacto2
       };
 
-      const { error: dbError } = await supabaseAdmin
-        .from('usuarios')
-        .upsert(datosAInsertar, { onConflict: 'id' });
+      const { error: dbError } = await supabase
+  .from('usuarios')
+  .upsert(datosAInsertar, { onConflict: 'id' });
+if (dbError) throw dbError;
 
-      if (dbError) throw dbError;
+// Corregido: llamada con objeto de parámetros (antes estaba mal)
+await registrarLog({
+  accion: 'REGISTRO_ALUMNO',
+  modulo: 'MATRICULAS',
+  descripcion: `Nuevo atleta matriculado: ${datosAInsertar.primer_nombre} ${datosAInsertar.primer_apellido}`,
+  detalles: { categoria: datosAInsertar.categoria, documento: datosAInsertar.numero_documento }
+});
 
-      registrarLog('REGISTRO', `Atleta matriculado: ${datosAInsertar.primer_nombre}`, 'MATRICULAS');
-      
-      mostrarMensaje("✨ ¡Matrícula deportiva completada!", "success");
-      
-      form.reset();
-      setFotoPreview(null);
-      setContacto1(''); setContacto2('');
-      setParentesco(''); setFechaNacimiento('');
-      setFechaInscripcion(new Date().toISOString().split('T')[0]);
-      setCategoriaAuto('Esperando fecha...');
+mostrarMensaje("✨ ¡Matrícula deportiva completada!", "success");
 
-    } catch (err) {
-      console.error("🛑 ERROR:", err);
-      if (userIdParaRollback) {
-        await supabaseAdmin.auth.admin.deleteUser(userIdParaRollback);
-      }
-      mostrarMensaje(err.message || "Error al procesar registro", "error");
-    } finally {
-      setLoading(false);
-      setStatusText('');
-    }
-  };
+form.reset();
+setFotoPreview(null);
+setContacto1(''); setContacto2('');
+setParentesco(''); setFechaNacimiento('');
+setFechaInscripcion(new Date().toISOString().split('T')[0]);
+setCategoriaAuto('Esperando fecha...');
+} catch (err) {
+  console.error("Error en registro:", err);
+  if (userIdParaRollback) {
+    // Rollback: eliminar usuario auth si falló algo después
+    await adminAction('eliminar-usuario', { userId: userIdParaRollback });
+  }
+  mostrarMensaje(err.message || "Error al procesar registro", "error");
+} finally {
+  setLoading(false);
+  setStatusText('');
+}
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-10 pb-20">
