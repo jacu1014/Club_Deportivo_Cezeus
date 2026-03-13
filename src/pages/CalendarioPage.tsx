@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval,
-  differenceInYears
+  startOfWeek, endOfWeek, isSameMonth, isSameDay, eachDayOfInterval
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../lib/supabaseClient';
 import { CATEGORIAS_EVENTOS, COLORES_CUMPLEANIOS } from '../constants/data';
 import ModalEvento from '../components/ModalEvento';
+import { usePageLog } from '../hooks/usePageLog';
+import { registrarLog } from '../lib/activity';
 
 const CalendarioPage = ({ userRol }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -23,13 +24,13 @@ const CalendarioPage = ({ userRol }) => {
 
   const canManage = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(userRol);
 
-  const fetchEventos = async () => {
+  // NUEVO: log automático de visita
+  usePageLog('CALENDARIO', { rol: userRol });
+
+  const fetchEventos = useCallback(async () => {
     try {
       setLoading(true);
-      // 1. Carga de eventos normales
       const { data: dataEventos, error: errorEv } = await supabase.from('eventos').select('*');
-      
-      // 2. Carga de cumpleaños desde la tabla 'usuarios' incluyendo el ROL
       const { data: dataUsuarios, error: errorUsr } = await supabase
         .from('usuarios')
         .select('primer_nombre, primer_apellido, fecha_nacimiento, rol')
@@ -42,10 +43,8 @@ const CalendarioPage = ({ userRol }) => {
         const configCategoria = CATEGORIAS_EVENTOS.find(
           cat => cat.id.toUpperCase() === ev.categoria?.toUpperCase()
         );
-
         const fechaOriginal = new Date(ev.fecha_inicio);
         const fechaAjustada = new Date(fechaOriginal.getTime() + fechaOriginal.getTimezoneOffset() * 60000);
-
         return {
           ...ev,
           fecha_inicio: fechaAjustada,
@@ -59,10 +58,7 @@ const CalendarioPage = ({ userRol }) => {
         const anioVista = currentMonth.getFullYear();
         const fechaEvento = new Date(anioVista, mesNac - 1, diaNac, 12, 0, 0);
         const trimestre = mesNac <= 3 ? 'T1' : mesNac <= 6 ? 'T2' : mesNac <= 9 ? 'T3' : 'T4';
-        
-        // Calculamos la edad que cumplirá en el año de la vista
         const edadCumplida = anioVista - anioNac;
-
         return {
           id: `cumple-${usr.primer_nombre}-${usr.fecha_nacimiento}`,
           titulo: `CUMPLEAÑOS: ${usr.primer_nombre} ${usr.primer_apellido || ''}`,
@@ -70,7 +66,6 @@ const CalendarioPage = ({ userRol }) => {
           fecha_inicio: fechaEvento,
           color: COLORES_CUMPLEANIOS[trimestre],
           esCumpleanios: true,
-          // Información extra para la lógica de visualización
           rolUsuario: usr.rol,
           edadParaMostrar: edadCumplida
         };
@@ -78,13 +73,28 @@ const CalendarioPage = ({ userRol }) => {
       
       setEventos([...normales, ...cumpleanios]);
     } catch (err) {
-      console.error("Error cargando agenda:", err.message);
+      // silencioso en produccion
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentMonth]);
 
-  useEffect(() => { fetchEventos(); }, [currentMonth]);
+  useEffect(() => { fetchEventos(); }, [fetchEventos]);
+
+  // NUEVO: log al guardar un evento (nuevo o editado)
+  const handleSaveEvento = async () => {
+    await registrarLog({
+      accion: eventoSeleccionado ? 'EDITAR_EVENTO' : 'CREAR_EVENTO',
+      modulo: 'CALENDARIO',
+      descripcion: eventoSeleccionado
+        ? `Evento editado: ${eventoSeleccionado.titulo}`
+        : 'Nuevo evento creado en el calendario',
+      detalles: eventoSeleccionado
+        ? { id_evento: eventoSeleccionado.id, categoria: eventoSeleccionado.categoria }
+        : {}
+    });
+    fetchEventos();
+  };
 
   const days = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -105,7 +115,7 @@ const CalendarioPage = ({ userRol }) => {
   };
 
   const handleEditarEvento = (evento) => {
-    if (!canManage || evento.esCumpleanios) return; 
+    if (!canManage || evento.esCumpleanios) return;
     setEventoSeleccionado(evento);
     setShowModal(true);
   };
@@ -128,7 +138,6 @@ const CalendarioPage = ({ userRol }) => {
             Gestión de entrenamientos, partidos y eventos del club
           </p>
         </div>
-
         {canManage && (
           <button 
             onClick={() => { setEventoSeleccionado(null); setShowModal(true); }}
@@ -149,7 +158,6 @@ const CalendarioPage = ({ userRol }) => {
               <span className="material-symbols-outlined text-cyan-400 text-sm">filter_list</span>
               <h4 className="font-black text-[11px] text-white uppercase tracking-[0.2em]">Filtrar Vista</h4>
             </div>
-            
             <div className="grid grid-cols-2 lg:grid-cols-1 gap-2.5">
               {listaFiltros.map(cat => {
                 const isActive = filtrosActivos.includes(cat.id);
@@ -157,10 +165,8 @@ const CalendarioPage = ({ userRol }) => {
                   <button 
                     key={cat.id} 
                     onClick={() => toggleFiltro(cat.id)}
-                    className={`
-                      w-full flex items-center justify-between p-3.5 rounded-[1.2rem] border transition-all duration-300 group
-                      ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}
-                    `}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-[1.2rem] border transition-all duration-300 group
+                      ${isActive ? 'bg-[#161b22] border-white/10 shadow-lg' : 'bg-transparent border-transparent opacity-40 hover:opacity-100 hover:bg-white/5'}`}
                   >
                     <div className="flex items-center gap-4">
                       <span className="material-symbols-outlined text-[18px]" style={{ color: cat.color }}>
@@ -170,11 +176,8 @@ const CalendarioPage = ({ userRol }) => {
                         {cat.label}
                       </span>
                     </div>
-                    
-                    <div className={`
-                      w-5 h-5 rounded-lg border flex items-center justify-center transition-all
-                      ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}
-                    `}>
+                    <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all
+                      ${isActive ? 'bg-cyan-400 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'border-white/10 bg-white/5'}`}>
                       {isActive && <span className="material-symbols-outlined text-[12px] text-black font-black">check</span>}
                     </div>
                   </button>
@@ -188,25 +191,19 @@ const CalendarioPage = ({ userRol }) => {
             <h4 className="font-black text-[10px] text-white uppercase tracking-widest mb-6 italic opacity-60">Próximos en agenda</h4>
             <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
               {eventos
-                .filter(ev => {
-                  const hoy = new Date();
-                  hoy.setHours(0, 0, 0, 0);
-                  return ev.fecha_inicio >= hoy;
-                })
+                .filter(ev => { const hoy = new Date(); hoy.setHours(0,0,0,0); return ev.fecha_inicio >= hoy; })
                 .sort((a, b) => a.fecha_inicio - b.fecha_inicio)
                 .slice(0, 10)
                 .map(ev => (
                   <div 
-                    key={ev.id} 
+                    key={ev.id}
                     className={`relative pl-4 border-l-2 transition-all group py-1 ${ev.esCumpleanios ? 'border-pink-500/30 hover:border-pink-500' : 'border-white/10 hover:border-cyan-400/50'}`}
                   >
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="text-[8px] font-black text-cyan-400 uppercase">
                         {format(ev.fecha_inicio, "dd MMM", { locale: es })}
                       </p>
-                      {ev.esCumpleanios && (
-                        <span className="material-symbols-outlined text-[10px] text-pink-500">cake</span>
-                      )}
+                      {ev.esCumpleanios && <span className="material-symbols-outlined text-[10px] text-pink-500">cake</span>}
                     </div>
                     <h5 className={`text-[11px] font-black uppercase italic transition-colors truncate ${ev.esCumpleanios ? 'text-pink-300 group-hover:text-pink-400' : 'text-white group-hover:text-cyan-400'}`}>
                       {ev.titulo}
@@ -252,8 +249,8 @@ const CalendarioPage = ({ userRol }) => {
             </div>
           </div>
 
-            <div className="w-full select-none"> 
-              <div className="w-full pb-4">
+          <div className="w-full select-none">
+            <div className="w-full pb-4">
               <div className="grid grid-cols-7 border-b border-white/5 mb-2 text-center">
                 {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
                   <div key={i} className="py-3 text-[10px] font-black uppercase text-slate-500">
@@ -262,29 +259,22 @@ const CalendarioPage = ({ userRol }) => {
                   </div>
                 ))}
               </div>
-
               <div className="grid grid-cols-7 auto-rows-[minmax(120px,auto)] border-l border-t border-white/5">
                 {days.map((day, idx) => {
                   const eventosDelDia = eventosFiltrados.filter(ev => isSameDay(ev.fecha_inicio, day));
                   const numEventos = eventosDelDia.length;
                   const esHoy = isSameDay(day, new Date());
-                  const esMesActual = isSameMonth(day, currentMonth); // <--- DEFINICIÓN AGREGADA
+                  const esMesActual = isSameMonth(day, currentMonth);
                   const esMuchosEventos = numEventos > 2;
-
                   return (
                     <div 
-                      key={idx} 
-                      className={`
-                        border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col
-                        min-h-[80px] md:min-h-[140px]
+                      key={idx}
+                      className={`border-r border-b border-white/5 p-1 md:p-2 transition-all relative flex flex-col min-h-[80px] md:min-h-[140px]
                         ${!esMesActual ? 'bg-black/40 opacity-20' : 'hover:bg-white/[0.03]'}
-                        ${esHoy ? 'bg-cyan-500/[0.05]' : ''}
-                      `}
+                        ${esHoy ? 'bg-cyan-500/[0.05]' : ''}`}
                     >
                       <div className="flex justify-between items-center mb-1 px-1">
-                        <span className={`text-[10px] md:text-[11px] font-black ${
-                          esHoy ? 'text-cyan-400 bg-cyan-400/10 px-1.5 rounded-md' : 'text-slate-500'
-                        }`}>
+                        <span className={`text-[10px] md:text-[11px] font-black ${esHoy ? 'text-cyan-400 bg-cyan-400/10 px-1.5 rounded-md' : 'text-slate-500'}`}>
                           {format(day, 'd')}
                         </span>
                         {numEventos > 0 && (
@@ -295,27 +285,21 @@ const CalendarioPage = ({ userRol }) => {
                           </div>
                         )}
                       </div>
-                      
                       <div className={`flex-1 flex gap-1.5 overflow-y-auto custom-scrollbar pr-0.5
-                        ${esMuchosEventos ? 'flex-row flex-wrap content-start' : 'flex-col'}
-                      `}>
+                        ${esMuchosEventos ? 'flex-row flex-wrap content-start' : 'flex-col'}`}>
                         {eventosDelDia.map(ev => {
                           const configCat = CATEGORIAS_EVENTOS.find(c => c.id.toUpperCase() === ev.categoria?.toUpperCase());
-                          
                           return (
                             <div 
-                              key={ev.id} 
+                              key={ev.id}
                               onClick={() => handleEditarEvento(ev)}
-                              className={`
-                                relative font-bold uppercase italic flex flex-col items-center justify-center
-                                border transition-all duration-300 shadow-sm shrink-0 overflow-hidden
+                              className={`relative font-bold uppercase italic flex flex-col items-center justify-center border transition-all duration-300 shadow-sm shrink-0 overflow-hidden
                                 ${ev.esCumpleanios ? 'cursor-default' : 'cursor-pointer hover:scale-[1.02] active:scale-95 hover:shadow-xl hover:z-10'}
                                 ${esMuchosEventos 
                                   ? 'w-[calc(50%-4px)] h-12 rounded-xl p-1' 
                                   : numEventos === 2
                                     ? 'w-full py-2 px-3 min-h-[48px] rounded-xl'
-                                    : 'w-full py-4 px-3 min-h-[65px] rounded-2xl'}
-                              `}
+                                    : 'w-full py-4 px-3 min-h-[65px] rounded-2xl'}`}
                               style={{ 
                                 backgroundColor: `${ev.color}12`, 
                                 borderColor: `${ev.color}30`, 
@@ -327,14 +311,12 @@ const CalendarioPage = ({ userRol }) => {
                               <span className={`material-symbols-outlined leading-none shrink-0 ${esMuchosEventos ? 'text-[15px]' : 'text-[20px]'}`}>
                                 {ev.esCumpleanios ? 'cake' : (configCat?.icono || 'event')}
                               </span>
-
                               {!esMuchosEventos && (
                                 <span className={`tracking-tight font-black leading-tight text-center mt-1.5 break-words line-clamp-2 ${numEventos === 2 ? 'text-[8px]' : 'text-[10px]'}`}>
                                   {ev.titulo}
                                   {ev.esCumpleanios && ev.rolUsuario === 'ALUMNO' && ` (${ev.edadParaMostrar})`}
                                 </span>
                               )}
-
                               {!esMuchosEventos && !ev.esCumpleanios && (
                                 <div className="flex items-center gap-1 mt-1 opacity-70">
                                   <span className="text-[7px] font-black bg-white/10 px-1.5 py-0.5 rounded-md">
@@ -357,8 +339,8 @@ const CalendarioPage = ({ userRol }) => {
 
       <ModalEvento 
         isOpen={showModal} 
-        onClose={() => { setShowModal(false); setEventoSeleccionado(null); }} 
-        onSave={fetchEventos}
+        onClose={() => { setShowModal(false); setEventoSeleccionado(null); }}
+        onSave={handleSaveEvento}
         eventoParaEditar={eventoSeleccionado}
       />
     </div>
