@@ -68,7 +68,7 @@ function App() {
       try {
         const { data, error } = await supabase
           .from('usuarios')
-          .select('*')
+          .select('id, rol, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, email, foto_url, telefono, estado, categoria, acepta_terminos, fecha_nacimiento, fecha_inscripcion, tipo_documento, numero_documento, genero, direccion, eps, grupo_sanguineo, factor_rh, condiciones_medicas, acudiente_primer_nombre, acudiente_segundo_nombre, acudiente_primer_apellido, acudiente_segundo_apellido, acudiente_parentesco, acudiente_telefono')
           .eq('id', userId)
           .maybeSingle();
         if (error) throw error;
