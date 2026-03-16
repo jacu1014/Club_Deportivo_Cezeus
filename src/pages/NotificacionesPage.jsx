@@ -22,12 +22,12 @@ const NotificacionesPage = () => {
   }, [filtroRol]);
 
   const fetchUsuarios = async () => {
-    const { data } = await supabase.from('usuarios').select('*').eq('rol', filtroRol).order('primer_nombre');
+    const { data } = await supabase.from('usuarios').select('id, rol, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, email, telefono, numero_documento, categoria, acudiente_telefono, acudiente_primer_nombre, acudiente_primer_apellido, acudiente_parentesco, fecha_nacimiento, genero').eq('rol', filtroRol).order('primer_nombre');
     setUsuarios(data || []);
   };
 
   const fetchConfiguraciones = async () => {
-    const { data } = await supabase.from('configuraciones_club').select('*');
+    const { data } = await supabase.from('configuraciones_club').select('id, nombre_tarifa, categoria_asociada, valor, descripcion');
     setConfiguraciones(data || []);
   };
 

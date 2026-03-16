@@ -28,8 +28,8 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [] }) => {
     try {
       setLoading(true);
       const [resConfig, resProv] = await Promise.all([
-        supabase.from('configuraciones_club').select('*').order('nombre_tarifa', { ascending: true }),
-        supabase.from('proveedores').select('*').order('created_at', { ascending: false })
+        supabase.from('configuraciones_club').select('id, nombre_tarifa, categoria_asociada, valor, descripcion, ultima_actualizacion').order('nombre_tarifa', { ascending: true }),
+        supabase.from('proveedores').select('id, nombre_proveedor, nit_cc, telefono, categoria_servicio, created_at').order('created_at', { ascending: false })
       ]);
 
       if (resConfig.data) setTarifas(resConfig.data);

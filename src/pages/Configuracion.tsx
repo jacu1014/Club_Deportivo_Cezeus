@@ -33,7 +33,7 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
       setLoadingStaff(true);
       const { data, error } = await supabase
         .from('usuarios')
-        .select('*')
+        .select('id, rol, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, email, telefono, foto_url, estado, tipo_documento, numero_documento, fecha_nacimiento, genero, direccion, eps, grupo_sanguineo, factor_rh, categoria')
         .order('primer_nombre', { ascending: true });
       if (error) throw error;
       setStaff(data || []);

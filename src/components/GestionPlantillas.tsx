@@ -55,7 +55,7 @@ const GestionPlantillas = ({ onSelect, mostrarNotif }) => {
   useEffect(() => { fetchPlantillas(); }, []);
 
   const fetchPlantillas = async () => {
-    const { data } = await supabase.from('plantillas_mensajes').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('plantillas_mensajes').select('id, titulo, cuerpo, categoria, creado_por, created_at').order('created_at', { ascending: false });
     setPlantillas(data || []);
   };
 
