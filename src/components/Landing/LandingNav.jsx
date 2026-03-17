@@ -1,6 +1,6 @@
 // src/pages/landing/components/LandingNav.jsx
 import { useState } from 'react';
-import LogoImg from './Logo_Cezeus.jpeg';
+import LogoImg from './components/Logo_Cezeus.jpeg';
 
 export default function LandingNav() {
   const [open, setOpen] = useState(false);
