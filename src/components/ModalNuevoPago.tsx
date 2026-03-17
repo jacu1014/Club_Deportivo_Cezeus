@@ -35,7 +35,7 @@ const ModalNuevoPago = ({ isOpen, onClose, onSuccess, editData }: Props) => {
       try {
         const { data, error } = await supabase
           .from('configuraciones_club')
-          .select('*');
+          .select('id, nombre_tarifa, categoria_asociada, valor, descripcion');
         
         if (error) throw error;
         setTarifasGlobales(data || []);

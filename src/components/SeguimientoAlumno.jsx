@@ -36,7 +36,7 @@ const SeguimientoAlumno = ({
       setLoading(true);
       const { data, error } = await supabase
         .from('usuarios')
-        .select('*')
+        .select('id, rol, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, foto_url, categoria, estado, fecha_nacimiento, fecha_inscripcion, numero_documento, email, telefono')
         .eq('rol', 'ALUMNO')
         .order('primer_apellido');
 

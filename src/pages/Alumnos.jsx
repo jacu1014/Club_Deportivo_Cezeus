@@ -20,7 +20,7 @@ const AlumnosModule = () => {
         if (session?.user) {
           const { data: profile } = await supabase
             .from('usuarios')
-            .select('*')
+            .select('id, rol, primer_nombre, primer_apellido, foto_url, estado, categoria, acepta_terminos')
             .eq('id', session.user.id)
             .single();
           if (profile) setUser(profile);

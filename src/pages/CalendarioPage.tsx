@@ -30,7 +30,7 @@ const CalendarioPage = ({ userRol }) => {
   const fetchEventos = useCallback(async () => {
     try {
       setLoading(true);
-      const { data: dataEventos, error: errorEv } = await supabase.from('eventos').select('*');
+      const { data: dataEventos, error: errorEv } = await supabase.from('eventos').select('id, titulo, categoria, fecha_inicio, ubicacion, descripcion, color, creado_por');
       const { data: dataUsuarios, error: errorUsr } = await supabase
         .from('usuarios')
         .select('primer_nombre, primer_apellido, fecha_nacimiento, rol')
