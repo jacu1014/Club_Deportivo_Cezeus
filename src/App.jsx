@@ -9,7 +9,7 @@ import ResetPassword  from './pages/ResetPassword';
 import MainLayout     from './layouts/MainLayout';
 import TermsModal     from './components/TermsModal';
 // FIX: ruta corregida según tu nueva estructura src/components/Landing/
-import LandingPage    from './components/Landing/LandingPage';
+import LandingPage    from './components/LandingPage';
 
 // Lazy-loaded pages (sin cambios)
 const Alumnos            = lazy(() => import('./pages/Alumnos'));
