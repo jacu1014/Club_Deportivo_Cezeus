@@ -20,7 +20,7 @@ import ProgramaSection  from '../components/Landing/ProgramaSection';
 import ValoresSection   from '../components/Landing/ValoresSection';
 import ContactoSection  from '../components/Landing/ContactoSection';
 import LandingFooter    from '../components/Landing/LandingFooter';
-import { useGaleria }   from './hooks/useGaleria';
+import { useGaleria }   from '../hooks/useGaleria';
 
 export default function LandingPage() {
   const { fotos, loading } = useGaleria();
