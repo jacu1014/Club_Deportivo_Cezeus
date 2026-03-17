@@ -11,7 +11,7 @@ export enum RolUsuario {
 export enum PaginasApp {
   DASHBOARD = 'dashboard',
   ALUMNOS = 'alumnos',
-  EVALUACION = 'evaluacion',
+  AVANCES = 'avances',
   PAGOS = 'pagos',
   CALENDARIO = 'calendar_today',
   NOTIFICACIONES = 'notifications_active',

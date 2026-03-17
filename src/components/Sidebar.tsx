@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const menuItems = [
     { id: PaginasApp.DASHBOARD,      label: 'ASISTENCIA',     icon: 'grid_view',               path: '/dashboard' },
     { id: PaginasApp.ALUMNOS,        label: 'ALUMNOS',        icon: 'groups',                  path: '/alumnos' },
-    { id: PaginasApp.EVALUACION,     label: 'EVALUACIÓN',     icon: 'analytics',               path: '/evaluacion' },
+    { id: PaginasApp.AVANCES,        label: 'AVANCES',        icon: 'analytics',               path: '/avances' },
     { id: PaginasApp.PAGOS,          label: 'PAGOS',          icon: 'account_balance_wallet',  path: '/pagos' },
     { id: PaginasApp.CALENDARIO,     label: 'CALENDARIO',     icon: 'calendar_today',          path: '/calendario' },
     { id: PaginasApp.NOTIFICACIONES, label: 'NOTIFICACIONES', icon: 'notifications_active',    path: '/notificaciones' },

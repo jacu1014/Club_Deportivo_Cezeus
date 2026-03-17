@@ -17,6 +17,7 @@ const CalendarioPage     = lazy(() => import('./pages/CalendarioPage'));
 const Nosotros           = lazy(() => import('./pages/Nosotros'));
 const DashboardPage      = lazy(() => import('./pages/DashboardPage'));
 const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage'));
+const AvancesPage = lazy(() => import('./pages/AvancesPage'));
 
 // ─── Persistencia del perfil en localStorage ─────────────────────────────────
 // Sobrevive recargas de página. Se limpia al cerrar sesión.
@@ -336,6 +337,11 @@ function App() {
             <Route path="/pagos" element={
               user && canAccess(PaginasApp.PAGOS)
                 ? <MainLayout user={user}><PagosModule user={user} /></MainLayout>
+                : <Navigate to={user ? defaultPath : '/login'} replace />
+            } />
+            <Route path="/evaluacion" element={
+              user && canAccess(PaginasApp.EVALUACION)
+                ? <MainLayout user={user}><AvancesPage user={user} /></MainLayout>
                 : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
 
