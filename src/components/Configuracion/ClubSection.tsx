@@ -1,13 +1,4 @@
 // src/components/Configuracion/ClubSection.tsx
-//
-// CAMBIOS v2:
-//  1. Props: se agrega `user` (Usuario) para leer el rol y condicionar la galería.
-//  2. `fetchData` envuelto en useCallback para eliminarlo como dependencia del useEffect.
-//  3. alert() reemplazado por un sistema de toast interno (sin librerías externas).
-//  4. Los inputs del form de proveedores se refactorizan con un helper para evitar repetición.
-//  5. Se agrega <GaleriaManager> al final, visible solo para SUPER_ADMIN, ADMINISTRATIVO y DIRECTOR.
-//  6. GaleriaManager permite subir, activar/ocultar y eliminar fotos de la tabla `galeria_publica`.
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ConfigInput } from './ConfigUI';
 import { Usuario, RolUsuario } from '../../types';
@@ -15,10 +6,9 @@ import { supabase } from '../../lib/supabaseClient';
 import { CATEGORIAS_FINANZAS } from '../../constants/data';
 import { registrarLog } from '../../lib/activity';
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
 interface ClubSectionProps {
   staff?: Usuario[];
-  user?: Usuario; // necesario para condicionar la sección de galería
+  user?: Usuario;
 }
 
 interface ToastState {
@@ -26,15 +16,12 @@ interface ToastState {
   tipo: 'ok' | 'error';
 }
 
-// ─── Roles con acceso a galería ───────────────────────────────────────────────
 const ROLES_GALERIA: string[] = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'];
 
-// ─── Componente principal ────────────────────────────────────────────────────
 export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<ToastState | null>(null);
-
   const [tarifas, setTarifas]         = useState<any[]>([]);
   const [proveedores, setProveedores] = useState<any[]>([]);
   const [searchTerm, setSearchTerm]   = useState('');
@@ -45,15 +32,11 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
     categoria_servicio: '',
   });
 
-  // ── Toast helper ────────────────────────────────────────────────────────────
   const mostrarToast = (msg: string, tipo: 'ok' | 'error' = 'ok') => {
     setToast({ msg, tipo });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // ── Fetch data ───────────────────────────────────────────────────────────────
-  // useCallback para que pueda usarse como dependencia estable en useEffect
-  // y también llamarse manualmente tras agregar un proveedor.
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -74,11 +57,10 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
     } finally {
       setLoading(false);
     }
-  }, []); // sin dependencias: solo usa supabase y setters estables
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Tarifas ──────────────────────────────────────────────────────────────────
   const handleUpdateTarifa = (id: string, nuevoValor: number) =>
     setTarifas(prev => prev.map(t => (t.id === id ? { ...t, valor: nuevoValor } : t)));
 
@@ -104,7 +86,6 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
     }
   };
 
-  // ── Proveedores ──────────────────────────────────────────────────────────────
   const agregarProveedor = async (e: React.FormEvent) => {
     e.preventDefault();
     const nitNorm = nuevoProveedor.nit_cc.trim().toLowerCase();
@@ -155,7 +136,6 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
     }
   };
 
-  // ── Filtrado ─────────────────────────────────────────────────────────────────
   const proveedoresFiltrados = proveedores.filter(p => {
     const q = searchTerm.toLowerCase();
     return (
@@ -165,9 +145,7 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
     );
   });
 
-  // ── Cálculos ─────────────────────────────────────────────────────────────────
   const alumnos = staff.filter(u => u.rol === RolUsuario.ALUMNO);
-
   const categoriasVisuales = [
     { nombre: 'Iniciación', rango: '5-7 años',   count: alumnos.filter(a => a.categoria?.toLowerCase().includes('iniciación')).length },
     { nombre: 'Infantil',   rango: '8-10 años',  count: alumnos.filter(a => a.categoria?.toLowerCase().includes('infantil')).length },
@@ -177,23 +155,24 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
   const valMensualidad = tarifas.find(t => t.categoria_asociada === 'Mensualidad' && t.nombre_tarifa === 'Mensualidad Base Full')?.valor ?? 0;
   const valCanchas     = tarifas.find(t => t.nombre_tarifa.toLowerCase().includes('cancha'))?.valor ?? 0;
 
-  const puedeGestionarGaleria = Boolean(user?.rol && ROLES_GALERIA.includes(user.rol));
+  // FIX: si user no llega como prop, intentamos leerlo de localStorage como fallback
+  const userRol = user?.rol ?? (() => {
+    try { return JSON.parse(localStorage.getItem('cezeus_user_profile') || '{}')?.rol; } catch { return null; }
+  })();
+  const puedeGestionarGaleria = Boolean(userRol && ROLES_GALERIA.includes(userRol));
 
-  // ── Render de carga ───────────────────────────────────────────────────────────
   if (loading) return (
     <div className="py-20 text-center text-primary animate-pulse font-black uppercase text-[10px] tracking-[0.5em]">
       Sincronizando...
     </div>
   );
 
-  // ── Render principal ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 pb-10 relative">
 
-      {/* ── Toast ── */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest
-                         shadow-xl transition-all animate-in slide-in-from-bottom-2 duration-300
+                         shadow-xl animate-in slide-in-from-bottom-2 duration-300
                          ${toast.tipo === 'ok'
                            ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
                            : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'}`}>
@@ -201,16 +180,16 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
         </div>
       )}
 
-      {/* ── Métricas ── */}
+      {/* Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <MetricCard color="emerald" label="Recaudo Proyectado" value={`$${(alumnos.length * valMensualidad).toLocaleString()}`} />
-        <MetricCard color="primary" label="Total Alumnos"      value={`${alumnos.length} Atletas`} />
+        <MetricCard color="emerald" label="Recaudo Proyectado"  value={`$${(alumnos.length * valMensualidad).toLocaleString()}`} />
+        <MetricCard color="primary" label="Total Alumnos"       value={`${alumnos.length} Atletas`} />
         <MetricCard color="blue"    label="Gasto Cancha Semanal" value={`$${valCanchas.toLocaleString()}`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* ── Categorías ── */}
+        {/* Categorías */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-4">
           <SectionHeader icon="category" color="text-primary" title="Estructura de Categorías" />
           <div className="space-y-3">
@@ -228,7 +207,7 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
           </div>
         </div>
 
-        {/* ── Tarifas ── */}
+        {/* Tarifas */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 shadow-xl">
           <SectionHeader icon="payments" color="text-primary" title="Tarifas Globales" />
           <div className="space-y-4">
@@ -256,15 +235,13 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
           </div>
         </div>
 
-        {/* ── Proveedores ── */}
+        {/* Proveedores */}
         <div className="lg:col-span-2 bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <SectionHeader icon="local_shipping" color="text-purple-400" title="Directorio de Proveedores" />
             <div className="relative group">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm
-                               group-focus-within:text-purple-400 transition-colors">
-                search
-              </span>
+                               group-focus-within:text-purple-400 transition-colors">search</span>
               <input
                 type="text"
                 placeholder="BUSCAR POR NOMBRE O NIT..."
@@ -276,7 +253,6 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
             </div>
           </div>
 
-          {/* Formulario nuevo proveedor */}
           <form
             onSubmit={agregarProveedor}
             className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white/5 p-4 rounded-2xl border border-white/5"
@@ -318,15 +294,12 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
             </button>
           </form>
 
-          {/* Lista de proveedores */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             {proveedoresFiltrados.length > 0 ? (
               proveedoresFiltrados.map(p => (
-                <div
-                  key={p.id}
-                  className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5
-                             group hover:border-purple-500/30 transition-all"
-                >
+                <div key={p.id}
+                     className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5
+                                group hover:border-purple-500/30 transition-all">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black text-white uppercase italic">{p.nombre_proveedor}</span>
                     <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{p.nit_cc} • {p.telefono}</span>
@@ -352,7 +325,7 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
           </div>
         </div>
 
-        {/* ── Galería pública — solo para roles autorizados ── */}
+        {/* Galería — visible para roles autorizados */}
         {puedeGestionarGaleria && (
           <div className="lg:col-span-2">
             <GaleriaManager />
@@ -363,11 +336,7 @@ export const ClubSection: React.FC<ClubSectionProps> = ({ staff = [], user }) =>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════
-//  Sub-componentes de UI reutilizables en este archivo
-// ═══════════════════════════════════════════════════════════════
-
-/** Tarjeta de métrica en la parte superior */
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
 const MetricCard: React.FC<{ color: string; label: string; value: string }> = ({ color, label, value }) => {
   const styles: Record<string, string> = {
     emerald: 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500',
@@ -382,7 +351,6 @@ const MetricCard: React.FC<{ color: string; label: string; value: string }> = ({
   );
 };
 
-/** Encabezado de sección con icono de Material Symbols */
 const SectionHeader: React.FC<{ icon: string; color: string; title: string }> = ({ icon, color, title }) => (
   <h3 className="text-white font-black text-sm uppercase italic flex items-center gap-2">
     <span className={`material-symbols-outlined ${color}`}>{icon}</span>
@@ -390,21 +358,19 @@ const SectionHeader: React.FC<{ icon: string; color: string; title: string }> = 
   </h3>
 );
 
-// ═══════════════════════════════════════════════════════════════
-//  GaleriaManager
-//  Gestiona la tabla `galeria_publica` en Supabase.
-//  Requiere:
-//    - Tabla: galeria_publica (id, url, descripcion, orden, activa)
-//    - Storage bucket: "galeria" (público)
-//    - Políticas RLS configuradas (ver supabase_galeria.sql)
-// ═══════════════════════════════════════════════════════════════
+// ─── GaleriaManager ───────────────────────────────────────────────────────────
+const BUCKET = 'galeria'; // nombre exacto del bucket en Supabase Storage
+
 const GaleriaManager: React.FC = () => {
   const [fotos, setFotos]          = useState<any[]>([]);
   const [loadingFotos, setLoading] = useState(true);
   const [uploading, setUploading]  = useState(false);
   const [desc, setDesc]            = useState('');
   const [toast, setToast]          = useState<ToastState | null>(null);
-  const fileRef                    = useRef<HTMLInputElement>(null);
+  // FIX: estado de preview para mostrar la imagen antes de subirla
+  const [preview, setPreview]      = useState<string | null>(null);
+  const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const mostrarToast = (msg: string, tipo: 'ok' | 'error' = 'ok') => {
     setToast({ msg, tipo });
@@ -413,39 +379,66 @@ const GaleriaManager: React.FC = () => {
 
   const cargarFotos = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('galeria_publica')
       .select('id, url, descripcion, orden, activa')
       .order('orden', { ascending: true });
+    if (error) console.error('Error cargando galería:', error);
     setFotos(data || []);
     setLoading(false);
   }, []);
 
   useEffect(() => { cargarFotos(); }, [cargarFotos]);
 
-  // Subir imagen al bucket y registrar en BD
-  const handleSubir = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // FIX: separar selección de archivo (muestra preview) de la subida (botón confirmar)
+  const handleSeleccionarArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validar tamaño máximo 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      mostrarToast('La imagen no puede superar 5MB.', 'error');
+      return;
+    }
+
+    setArchivoSeleccionado(file);
+    // Crear URL temporal para el preview
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+  };
+
+  const handleCancelarSeleccion = () => {
+    setArchivoSeleccionado(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleSubir = async () => {
+    if (!archivoSeleccionado) return;
     setUploading(true);
     try {
-      const ext      = file.name.split('.').pop();
+      const ext      = archivoSeleccionado.name.split('.').pop()?.toLowerCase();
       const fileName = `foto_${Date.now()}.${ext}`;
 
+      // 1. Subir al bucket
       const { error: uploadError } = await supabase.storage
-        .from('galeria')
-        .upload(fileName, file, { upsert: false });
-      if (uploadError) throw uploadError;
+        .from(BUCKET)
+        .upload(fileName, archivoSeleccionado, { upsert: false });
+      if (uploadError) throw new Error(`Error storage: ${uploadError.message}`);
 
-      const { data: urlData } = supabase.storage.from('galeria').getPublicUrl(fileName);
+      // 2. Obtener URL pública
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+      if (!urlData?.publicUrl) throw new Error('No se pudo obtener la URL pública.');
 
+      // 3. Registrar en BD
       const { error: dbError } = await supabase.from('galeria_publica').insert([{
         url:         urlData.publicUrl,
         descripcion: desc.trim() || `Foto ${fotos.length + 1}`,
         orden:       fotos.length + 1,
         activa:      true,
       }]);
-      if (dbError) throw dbError;
+      if (dbError) throw new Error(`Error BD: ${dbError.message}`);
 
       await registrarLog({
         accion: 'GALERIA_SUBIR_FOTO',
@@ -453,31 +446,36 @@ const GaleriaManager: React.FC = () => {
         modulo: 'CONFIGURACION',
       });
 
+      // Limpiar estado
       setDesc('');
-      if (fileRef.current) fileRef.current.value = '';
-      cargarFotos();
-      mostrarToast('Foto subida correctamente.');
+      handleCancelarSeleccion();
+      await cargarFotos();
+      mostrarToast('¡Foto subida y publicada en la landing!');
     } catch (err: any) {
-      mostrarToast('Error al subir: ' + err.message, 'error');
+      mostrarToast(err.message || 'Error desconocido al subir.', 'error');
     } finally {
       setUploading(false);
     }
   };
 
-  // Activar / ocultar foto en la landing
   const toggleActiva = async (id: string, activa: boolean) => {
-    const { error } = await supabase.from('galeria_publica').update({ activa: !activa }).eq('id', id);
+    const { error } = await supabase
+      .from('galeria_publica')
+      .update({ activa: !activa })
+      .eq('id', id);
     if (error) { mostrarToast('Error al actualizar.', 'error'); return; }
     setFotos(prev => prev.map(f => f.id === id ? { ...f, activa: !activa } : f));
+    mostrarToast(activa ? 'Foto ocultada de la landing.' : 'Foto publicada en la landing.');
   };
 
-  // Eliminar foto del storage y de la BD
   const eliminarFoto = async (foto: any) => {
-    if (!window.confirm('¿Eliminar esta foto de la galería?')) return;
+    if (!window.confirm('¿Eliminar esta foto permanentemente?')) return;
     try {
-      const parts    = foto.url.split('/');
-      const fileName = parts[parts.length - 1];
-      await supabase.storage.from('galeria').remove([fileName]);
+      // Extraer nombre del archivo de la URL pública
+      const fileName = foto.url.split('/').pop()?.split('?')[0];
+      if (fileName) {
+        await supabase.storage.from(BUCKET).remove([fileName]);
+      }
       const { error } = await supabase.from('galeria_publica').delete().eq('id', foto.id);
       if (error) throw error;
       await registrarLog({
@@ -495,7 +493,7 @@ const GaleriaManager: React.FC = () => {
   return (
     <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] p-6 space-y-6 relative">
 
-      {/* Toast local de galería */}
+      {/* Toast */}
       {toast && (
         <div className={`absolute bottom-4 right-4 z-10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest
                          ${toast.tipo === 'ok'
@@ -518,49 +516,101 @@ const GaleriaManager: React.FC = () => {
         La primera foto activa es la imagen principal del hero.
       </p>
 
-      {/* Formulario de subida */}
-      <div className="bg-primary/5 border border-primary/15 rounded-2xl p-5 space-y-3">
-        <p className="text-[10px] font-black uppercase tracking-widest text-primary">Subir nueva foto</p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="DESCRIPCIÓN (opcional)"
-            value={desc}
-            onChange={e => setDesc(e.target.value)}
-            className="flex-1 bg-[#020617] border border-white/10 p-3 rounded-xl text-[10px] font-bold
-                       text-white outline-none focus:border-primary uppercase"
-          />
-          <label className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black
-                             uppercase tracking-widest cursor-pointer transition-all
-                             ${uploading
-                               ? 'bg-white/5 text-slate-500 cursor-not-allowed'
-                               : 'bg-primary text-[#05080d] hover:bg-[#0AB5B5]'}`}>
-            <span className="material-symbols-outlined text-base">upload</span>
-            {uploading ? 'Subiendo...' : 'Seleccionar foto'}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              disabled={uploading}
-              onChange={handleSubir}
+      {/* ── Zona de subida ── */}
+      <div className="bg-primary/5 border border-primary/15 rounded-2xl p-5 space-y-4">
+        <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+          Subir nueva foto
+        </p>
+
+        {/* Preview de imagen seleccionada */}
+        {preview && (
+          <div className="flex gap-4 items-start bg-white/5 p-3 rounded-xl border border-white/10">
+            <img
+              src={preview}
+              alt="Preview"
+              className="w-24 h-24 object-cover rounded-xl border border-primary/30 flex-shrink-0"
             />
-          </label>
+            <div className="flex-1 space-y-2">
+              <p className="text-[10px] font-black text-white uppercase tracking-widest">
+                {archivoSeleccionado?.name}
+              </p>
+              <p className="text-[9px] text-slate-500 font-bold uppercase">
+                {((archivoSeleccionado?.size || 0) / 1024).toFixed(0)} KB
+              </p>
+              <input
+                type="text"
+                placeholder="DESCRIPCIÓN (opcional)"
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+                className="w-full bg-[#020617] border border-white/10 p-2 rounded-lg text-[10px] font-bold
+                           text-white outline-none focus:border-primary uppercase"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Botón seleccionar archivo */}
+          {!preview && (
+            <label className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-[10px] font-black
+                               uppercase tracking-widest cursor-pointer transition-all border-2 border-dashed border-primary/30
+                               hover:border-primary hover:bg-primary/5 text-slate-400 hover:text-primary">
+              <span className="material-symbols-outlined text-lg">add_photo_alternate</span>
+              Seleccionar foto
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleSeleccionarArchivo}
+              />
+            </label>
+          )}
+
+          {/* Botones cuando hay archivo seleccionado */}
+          {preview && (
+            <>
+              <button
+                onClick={handleCancelarSeleccion}
+                disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-[10px] font-black
+                           uppercase tracking-widest border border-white/10 text-slate-400
+                           hover:border-rose-500/40 hover:text-rose-400 transition-all disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubir}
+                disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-[10px] font-black
+                           uppercase tracking-widest bg-primary text-[#05080d]
+                           hover:bg-[#0AB5B5] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-base">
+                  {uploading ? 'hourglass_top' : 'cloud_upload'}
+                </span>
+                {uploading ? 'Subiendo...' : 'Publicar foto'}
+              </button>
+            </>
+          )}
         </div>
+
         <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-          Formatos: JPG, PNG, WebP · Resolución recomendada: 1200 × 800 px o mayor
+          Formatos: JPG, PNG, WebP · Máximo 5MB · Resolución recomendada: 1200 × 800 px
         </p>
       </div>
 
-      {/* Grid de fotos */}
+      {/* ── Grid de fotos ── */}
       {loadingFotos ? (
         <div className="py-10 text-center text-primary animate-pulse text-[10px] font-black uppercase tracking-widest">
           Cargando galería...
         </div>
       ) : fotos.length === 0 ? (
-        <div className="py-10 text-center border border-dashed border-white/10 rounded-2xl">
+        <div className="py-14 text-center border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-slate-600">photo_library</span>
           <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic">
-            No hay fotos aún. Sube la primera imagen.
+            No hay fotos aún. Sube la primera imagen del club.
           </span>
         </div>
       ) : (
@@ -586,14 +636,18 @@ const GaleriaManager: React.FC = () => {
 
               {/* Badge estado */}
               <span className={`absolute top-2 right-2 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full
-                                ${foto.activa ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'}`}>
+                                ${foto.activa
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : 'bg-slate-700 text-slate-500'}`}>
                 {foto.activa ? 'Activa' : 'Oculta'}
               </span>
 
               {/* Descripción */}
               {foto.descripcion && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                  <p className="text-white text-[9px] font-bold uppercase tracking-widest truncate">{foto.descripcion}</p>
+                  <p className="text-white text-[9px] font-bold uppercase tracking-widest truncate">
+                    {foto.descripcion}
+                  </p>
                 </div>
               )}
 
@@ -614,7 +668,7 @@ const GaleriaManager: React.FC = () => {
                 </button>
                 <button
                   onClick={() => eliminarFoto(foto)}
-                  title="Eliminar foto"
+                  title="Eliminar foto permanentemente"
                   className="w-9 h-9 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/40
                              flex items-center justify-center transition-colors"
                 >

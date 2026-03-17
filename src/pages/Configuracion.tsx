@@ -24,7 +24,7 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
 
   const currentRole = user?.rol || '';
-  const canManageClub = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
+  const canManageClub = ['SUPER_ADMIN', 'DIRECTOR','ADMINISTRATIVO'].includes(currentRole);
   const canSeeStaff = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR'].includes(currentRole);
   const canSeeActivity = ['SUPER_ADMIN', 'DIRECTOR'].includes(currentRole);
 
@@ -156,7 +156,7 @@ const Configuracion: React.FC<ConfiguracionProps> = ({ user }) => {
           </div>
         )}
         {activeTab === 'club' && canManageClub && (
-          <ClubSection staff={staff} />
+          <ClubSection staff={staff} user={user as Usuario} />
         )}
         {activeTab === 'actividad' && canSeeActivity && (
           <ActividadSection />
