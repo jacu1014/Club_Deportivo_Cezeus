@@ -9,7 +9,7 @@ import ResetPassword  from './pages/ResetPassword';
 import MainLayout     from './layouts/MainLayout';
 import TermsModal     from './components/TermsModal';
 // FIX: ruta corregida según tu nueva estructura src/components/Landing/
-import LandingPage    from './components/LandingPage';
+import LandingPage    from './components/Landing/LandingPage';
 
 // Lazy-loaded pages (sin cambios)
 const Alumnos            = lazy(() => import('./pages/Alumnos'));
@@ -196,7 +196,7 @@ function App() {
 
     // FIX: debounce en visibilitychange para evitar re-fetches innecesarios
     // cuando el usuario cambia de pestaña brevemente
-    let visTimer: ReturnType<typeof setTimeout>;
+    let visTimer;
     const handleVisibilityChange = () => {
       clearTimeout(visTimer);
       visTimer = setTimeout(async () => {
