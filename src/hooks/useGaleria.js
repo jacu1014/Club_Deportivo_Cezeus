@@ -5,7 +5,7 @@
 // Con una política RLS de SELECT pública.
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 
 export function useGaleria() {
   const [fotos, setFotos]     = useState([]);
