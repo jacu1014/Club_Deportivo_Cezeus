@@ -44,14 +44,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const menuItems = [
-    { id: PaginasApp.DASHBOARD,      label: 'ASISTENCIA',     icon: 'grid_view',               path: '/dashboard' },
-    { id: PaginasApp.ALUMNOS,        label: 'ALUMNOS',        icon: 'groups',                  path: '/alumnos' },
-    { id: PaginasApp.AVANCES,        label: 'AVANCES',        icon: 'analytics',               path: '/avances' },
-    { id: PaginasApp.PAGOS,          label: 'PAGOS',          icon: 'account_balance_wallet',  path: '/pagos' },
-    { id: PaginasApp.CALENDARIO,     label: 'CALENDARIO',     icon: 'calendar_today',          path: '/calendario' },
-    { id: PaginasApp.NOTIFICACIONES, label: 'NOTIFICACIONES', icon: 'notifications_active',    path: '/notificaciones' },
-    { id: PaginasApp.NOSOTROS,       label: 'NOSOTROS',       icon: 'shield',                  path: '/nosotros' },
-    { id: PaginasApp.CONFIGURACION,  label: 'CONFIGURACIÓN',  icon: 'settings',                path: '/configuracion' },
+    { id: PaginasApp.DASHBOARD,      label: 'ASISTENCIA',     icon: 'grid_view',              path: '/dashboard' },
+    { id: PaginasApp.ALUMNOS,        label: 'ALUMNOS',        icon: 'groups',                 path: '/alumnos' },
+    { id: PaginasApp.AVANCES,        label: 'AVANCES',        icon: 'analytics',              path: '/avances' },
+    { id: PaginasApp.PAGOS,          label: 'PAGOS',          icon: 'account_balance_wallet', path: '/pagos' },
+    { id: PaginasApp.CALENDARIO,     label: 'CALENDARIO',     icon: 'calendar_today',         path: '/calendario' },
+    { id: PaginasApp.NOTIFICACIONES, label: 'NOTIFICACIONES', icon: 'notifications_active',   path: '/notificaciones' },
+    { id: PaginasApp.NOSOTROS,       label: 'NOSOTROS',       icon: 'shield',                 path: '/nosotros' },
+    { id: PaginasApp.CONFIGURACION,  label: 'CONFIGURACIÓN',  icon: 'settings',               path: '/configuracion' },
   ];
 
   const currentRole  = user?.rol || RolUsuario.ALUMNO;
@@ -71,42 +71,48 @@ const Sidebar: React.FC<SidebarProps> = ({
       return item;
     });
 
-  // CORREGIDO: limpiar sessionStorage antes de navegar al login
+  // FIX: limpiar TODOS los datos locales del perfil y sesión al cerrar sesión
+  // Incluye cezeus_user_profile y cezeus_last_route usados en App.jsx
   const handleLogout = async () => {
-  try {
-    // 1. Limpiamos rastros locales primero
-    sessionStorage.clear(); 
-    localStorage.removeItem('cezeus-auth-token'); // Por si acaso usas este nombre
+    try {
+      // 1. Limpiar datos locales de la app
+      localStorage.removeItem('cezeus_user_profile');
+      localStorage.removeItem('cezeus_last_route');
+      localStorage.removeItem('cezeus-auth-token');
+      sessionStorage.clear();
 
-    // 2. Ejecutamos el cierre en Supabase
-    // Esto disparará automáticamente el evento SIGNED_OUT en App.jsx
-    await supabase.auth.signOut();
-    
-    // 3. Opcional: Si quieres asegurar redirección inmediata
-    window.location.href = '/login'; 
-  } catch (error) {
-    console.error("Error al cerrar sesión:", error);
-    // Si falla Supabase, igual forzamos salida local
-    window.location.href = '/login';
-  }
-};
+      // 2. Cerrar sesión en Supabase (dispara SIGNED_OUT en App.jsx)
+      await supabase.auth.signOut();
+
+      // 3. Redirigir al login
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      window.location.href = '/login';
+    }
+  };
 
   return (
     <>
       {/* OVERLAY MÓVILES */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300
+                    ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
 
       {/* ASIDE PRINCIPAL */}
-      <aside className={`w-72 lg:w-64 bg-[#0a1118] border-r border-white/5 fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`w-72 lg:w-64 bg-[#0a1118] border-r border-white/5 fixed inset-y-0 left-0 z-50
+                         flex flex-col transition-transform duration-300
+                         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
 
-        {/* CABECERA: LOGO */}
+        {/* LOGO */}
         <div className="p-8 flex flex-col items-center shrink-0">
-          <img src={LogoImg} alt="Logo" className="w-16 h-16 rounded-xl mb-4 border border-white/10 shadow-2xl" />
+          <img src={LogoImg} alt="Logo Club Cezeus" className="w-16 h-16 rounded-xl mb-4 border border-white/10 shadow-2xl" />
           <h2 className="text-[10px] tracking-[0.3em] text-white/40 uppercase font-bold">Club Deportivo</h2>
-          <h1 className="text-xl font-black text-white tracking-tighter italic">CE<span className="text-primary">ZEUS</span></h1>
+          <h1 className="text-xl font-black text-white tracking-tighter italic">
+            CE<span className="text-primary">ZEUS</span>
+          </h1>
         </div>
 
         {/* NAVEGACIÓN */}
@@ -136,32 +142,36 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* FOOTER */}
         <div className="p-4 border-t border-white/5 space-y-3 bg-black/20 shrink-0">
+
+          {/* Toggle tema */}
           <button
             onClick={toggleTheme}
-            className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all group border border-transparent hover:border-white/10"
+            className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl
+                       hover:bg-white/10 transition-all group border border-transparent hover:border-white/10"
           >
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-slate-500 group-hover:text-primary transition-colors">
                 {isDarkMode ? 'dark_mode' : 'light_mode'}
               </span>
-              <span className="text-[10px] font-black text-slate-500 group-hover:text-white uppercase tracking-tighter">Modo Oscuro</span>
+              <span className="text-[10px] font-black text-slate-500 group-hover:text-white uppercase tracking-tighter">
+                Modo Oscuro
+              </span>
             </div>
             <div className={`w-8 h-4 rounded-full p-1 transition-colors ${isDarkMode ? 'bg-primary' : 'bg-slate-700'}`}>
               <div className={`w-2 h-2 bg-white rounded-full transition-transform ${isDarkMode ? 'translate-x-4' : 'translate-x-0'}`} />
             </div>
           </button>
 
-          {/* User Profile Card */}
-          <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all duration-500 ${
-            isBirthday
-              ? 'bg-gradient-to-r from-amber-400/20 to-yellow-600/20 border-yellow-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] animate-pulse'
-              : 'bg-primary/5 border-primary/10'
-          }`}>
-            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-lg transition-colors ${
-              isBirthday
-                ? 'bg-gradient-to-br from-yellow-400 to-amber-600 text-black'
-                : 'bg-primary text-[#0a1118]'
-            }`}>
+          {/* Perfil + logout */}
+          <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all duration-500
+                           ${isBirthday
+                             ? 'bg-gradient-to-r from-amber-400/20 to-yellow-600/20 border-yellow-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] animate-pulse'
+                             : 'bg-primary/5 border-primary/10'}`}>
+            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center font-black
+                             text-xs shrink-0 shadow-lg transition-colors
+                             ${isBirthday
+                               ? 'bg-gradient-to-br from-yellow-400 to-amber-600 text-black'
+                               : 'bg-primary text-[#0a1118]'}`}>
               {initials}
               {isBirthday && (
                 <span className="absolute -top-3 -left-1 text-amber-400 rotate-[-20deg] drop-shadow-md">
@@ -170,16 +180,19 @@ const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`text-[10px] font-black truncate uppercase italic ${isBirthday ? 'text-yellow-400' : 'text-white'}`}>
+              <p className={`text-[10px] font-black truncate uppercase italic
+                             ${isBirthday ? 'text-yellow-400' : 'text-white'}`}>
                 {displayName}
               </p>
-              <p className={`text-[8px] font-black tracking-widest uppercase ${isBirthday ? 'text-amber-500/80' : 'text-primary/80'}`}>
+              <p className={`text-[8px] font-black tracking-widest uppercase
+                             ${isBirthday ? 'text-amber-500/80' : 'text-primary/80'}`}>
                 {getRoleLabel(user?.rol)}
               </p>
             </div>
             <button
               onClick={handleLogout}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500
+                         hover:text-rose-500 hover:bg-rose-500/10 transition-all"
               title="Cerrar Sesión"
             >
               <span className="material-symbols-outlined text-xl">logout</span>

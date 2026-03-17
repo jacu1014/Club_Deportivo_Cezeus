@@ -330,11 +330,14 @@ function App() {
                 : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
             {/* FIX: usar PaginasApp.AVANCES (no EVALUACION que no existe en types) */}
-            <Route path="/evaluacion" element={
+            {/* Avances — el Sidebar apunta a /avances, la ruta coincide */}
+            <Route path="/avances" element={
               user && canAccess(PaginasApp.AVANCES)
                 ? <MainLayout user={user}><AvancesPage user={user} /></MainLayout>
                 : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
+            {/* Alias /evaluacion por compatibilidad con links existentes */}
+            <Route path="/evaluacion" element={<Navigate to="/avances" replace />} />
 
             <Route path="*" element={<Navigate to={user ? redirectPath : '/login'} replace />} />
           </Routes>
