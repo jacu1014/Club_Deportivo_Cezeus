@@ -73,11 +73,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // CORREGIDO: limpiar sessionStorage antes de navegar al login
   const handleLogout = async () => {
-    sessionStorage.removeItem('last_route');
+  try {
+    // 1. Limpiamos rastros locales primero
+    sessionStorage.clear(); 
+    localStorage.removeItem('cezeus-auth-token'); // Por si acaso usas este nombre
+
+    // 2. Ejecutamos el cierre en Supabase
+    // Esto disparará automáticamente el evento SIGNED_OUT en App.jsx
     await supabase.auth.signOut();
-    localStorage.removeItem('cezeus-auth-token');
-    navigate('/login', { replace: true });
-  };
+    
+    // 3. Opcional: Si quieres asegurar redirección inmediata
+    window.location.href = '/login'; 
+  } catch (error) {
+    console.error("Error al cerrar sesión:", error);
+    // Si falla Supabase, igual forzamos salida local
+    window.location.href = '/login';
+  }
+};
 
   return (
     <>

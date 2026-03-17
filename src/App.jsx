@@ -160,10 +160,12 @@ function App() {
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
-          isUserLoaded.current = false;
+          isUserLoaded.current = false; // CRÍTICO: Resetear la referencia
           setLoading(false);
           setLegalText(null);
-          sessionStorage.removeItem('last_route');
+          sessionStorage.clear();
+          // La redirección ocurrirá sola porque el Router renderizará 
+          // la ruta /login al no haber user.
         }
       }
     });
