@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# No indexar rutas privadas de la app
+Disallow: /login
+Disallow: /dashboard
+Disallow: /alumnos
+Disallow: /calendario
+Disallow: /configuracion
+Disallow: /pagos
+Disallow: /notificaciones
+Disallow: /nosotros
+Disallow: /reset-password
+
+Sitemap: https://www.clubdeportivocezeus.com/sitemap.xml
