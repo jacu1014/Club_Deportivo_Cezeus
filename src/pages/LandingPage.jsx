@@ -11,15 +11,15 @@
 //   <Route path="/" element={!user ? <LandingPage /> : <Navigate to={redirectPath} replace />} />
 
 import { useEffect } from 'react';
-import LandingNav       from './components/Landing/LandingNav';
-import HeroSection      from './components/Landing/HeroSection';
-import HistoriaSection  from './components/Landing/HistoriaSection';
-import CategoriasSection from './components/Landing/CategoriasSection';
-import GaleriaSection   from './components/Landing/GaleriaSection';
-import ProgramaSection  from './components/Landing/ProgramaSection';
-import ValoresSection   from './components/Landing/ValoresSection';
-import ContactoSection  from './components/Landing/ContactoSection';
-import LandingFooter    from './components/Landing/LandingFooter';
+import LandingNav       from '../components/Landing/LandingNav'; 
+import HeroSection      from '../components/Landing/HeroSection';
+import HistoriaSection  from '../components/Landing/HistoriaSection';
+import CategoriasSection from '../components/Landing/CategoriasSection';
+import GaleriaSection   from '../components/Landing/GaleriaSection';
+import ProgramaSection  from '../components/Landing/ProgramaSection';
+import ValoresSection   from '../components/Landing/ValoresSection';
+import ContactoSection  from '../components/Landing/ContactoSection';
+import LandingFooter    from '../components/Landing/LandingFooter';
 import { useGaleria }   from './hooks/useGaleria';
 
 export default function LandingPage() {
