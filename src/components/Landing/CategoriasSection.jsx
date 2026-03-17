@@ -1,5 +1,5 @@
 // src/pages/landing/components/CategoriasSection.jsx
-
+import React from 'react'
 const CATEGORIAS = [
   {
     num: '01', nombre: 'Iniciación', rango: '5 a 7 años',
