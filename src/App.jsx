@@ -17,21 +17,19 @@ const CalendarioPage     = lazy(() => import('./pages/CalendarioPage'));
 const Nosotros           = lazy(() => import('./pages/Nosotros'));
 const DashboardPage      = lazy(() => import('./pages/DashboardPage'));
 const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage'));
-const AvancesPage = lazy(() => import('./pages/AvancesPage'));
+const AvancesPage        = lazy(() => import('./pages/AvancesPage'));
 
-// ─── Persistencia del perfil en localStorage ─────────────────────────────────
-// Sobrevive recargas de página. Se limpia al cerrar sesión.
+// ─── Persistencia del perfil ──────────────────────────────────────────────────
+// IMPORTANTE: usar la misma key que supabaseClient.storageKey para evitar conflictos
 const PROFILE_KEY = 'cezeus_user_profile';
+const ROUTE_KEY   = 'cezeus_last_route';
+
 const saveProfile  = (p) => { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {} };
 const loadProfile  = ()  => { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)); } catch { return null; } };
 const clearProfile = ()  => localStorage.removeItem(PROFILE_KEY);
-
-// ─── Persistencia de la última ruta visitada ──────────────────────────────────
-// FIX: localStorage en vez de sessionStorage para sobrevivir F5
-const ROUTE_KEY  = 'cezeus_last_route';
-const saveRoute  = (p) => localStorage.setItem(ROUTE_KEY, p);
-const loadRoute  = ()  => localStorage.getItem(ROUTE_KEY) || null;
-const clearRoute = ()  => localStorage.removeItem(ROUTE_KEY);
+const saveRoute    = (p) => localStorage.setItem(ROUTE_KEY, p);
+const loadRoute    = ()  => localStorage.getItem(ROUTE_KEY) || null;
+const clearRoute   = ()  => localStorage.removeItem(ROUTE_KEY);
 
 const EXCLUDED_ROUTES = ['/', '/login', '/reset-password'];
 
@@ -58,14 +56,18 @@ const RoutePreserver = () => {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 function App() {
-  // FIX: inicializar desde localStorage → evita flash de /login al refrescar
-  const [user, setUser]           = useState(() => loadProfile());
-  const [loading, setLoading]     = useState(true);
+  const [user, setUser]       = useState(() => loadProfile());
+  const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState(null);
-  const isUserLoaded              = useRef(Boolean(loadProfile()));
+  const isUserLoaded = useRef(Boolean(loadProfile()));
 
+  // FIX: canAccess usa PaginasApp correctamente
+  // Si PaginasApp.EVALUACION no existe en types, canAccess devuelve false
+  // y redirige al login en lugar de cargar la página
   const canAccess = useCallback((page) => {
     if (!user) return false;
+    // Protección extra: si page es undefined (enum inexistente), denegar acceso
+    if (!page) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page) ?? false;
   }, [user]);
 
@@ -109,8 +111,10 @@ function App() {
       }
     };
 
+    // FIX: leer rol desde app_metadata primero (más confiable),
+    // luego user_metadata como fallback
     const getRoleFromSession = (session) =>
-      session.user.app_metadata?.rol ||
+      session.user.app_metadata?.rol  ||
       session.user.user_metadata?.rol ||
       'ALUMNO';
 
@@ -128,13 +132,12 @@ function App() {
 
       const roleFromToken = getRoleFromSession(session);
 
-      // TOKEN_REFRESHED cada ~60s: NO re-fetchear perfil
-      // FIX: esto era lo que causaba pérdida de permisos a los 30-60 segundos
+      // TOKEN_REFRESHED (~60s): NO re-fetchear perfil, solo sincronizar rol si cambió
       if (isUserLoaded.current && !forceRefresh) {
         if (isMounted) {
           setUser(prev => {
             if (!prev) return prev;
-            if (prev.rol === roleFromToken) return prev; // sin cambios → sin re-render
+            if (prev.rol === roleFromToken) return prev;
             const updated = { ...prev, rol: roleFromToken };
             saveProfile(updated);
             return updated;
@@ -144,7 +147,7 @@ function App() {
         return;
       }
 
-      // SIGNED_IN o primer arranque: fetch completo
+      // SIGNED_IN o primer arranque: fetch completo del perfil
       const profile = await fetchUserProfile(session.user.id);
 
       if (isMounted) {
@@ -173,8 +176,6 @@ function App() {
 
         if (session) {
           const cached = loadProfile();
-
-          // Si hay perfil en caché y sesión activa → no re-fetchear, solo verificar rol
           if (cached && isUserLoaded.current) {
             const roleFromToken = getRoleFromSession(session);
             if (isMounted) {
@@ -191,7 +192,6 @@ function App() {
             await updateUserData(session, true);
           }
         } else {
-          // Sin sesión → limpiar todo y mostrar landing/login
           clearProfile();
           clearRoute();
           if (isMounted) {
@@ -212,7 +212,6 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
-        // initApp() ya lo maneja
         if (!session && isMounted) {
           clearProfile();
           setLoading(false);
@@ -220,14 +219,10 @@ function App() {
         }
         return;
       }
-
       if (event === 'SIGNED_IN') {
         await updateUserData(session, true);
-
       } else if (event === 'TOKEN_REFRESHED') {
-        // FIX: solo sincronizar rol, nunca re-fetchear perfil en refresco de token
         await updateUserData(session, false);
-
       } else if (event === 'SIGNED_OUT') {
         if (isMounted) {
           setUser(null);
@@ -240,7 +235,6 @@ function App() {
       }
     });
 
-    // Visibilidad: verificar sesión al volver a la pestaña
     let visTimer;
     const handleVisibilityChange = () => {
       clearTimeout(visTimer);
@@ -271,7 +265,6 @@ function App() {
     };
   }, [fetchLegal]);
 
-  // Mostrar spinner solo si estamos cargando Y no tenemos usuario en caché
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -297,10 +290,7 @@ function App() {
         <RoutePreserver />
         <Suspense fallback={<PageSpinner />}>
           <Routes>
-            <Route
-              path="/"
-              element={!user ? <LandingPage /> : <Navigate to={redirectPath} replace />}
-            />
+            <Route path="/" element={!user ? <LandingPage /> : <Navigate to={redirectPath} replace />} />
             <Route path="/login"          element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -339,8 +329,9 @@ function App() {
                 ? <MainLayout user={user}><PagosModule user={user} /></MainLayout>
                 : <Navigate to={user ? defaultPath : '/login'} replace />
             } />
+            {/* FIX: usar PaginasApp.AVANCES (no EVALUACION que no existe en types) */}
             <Route path="/evaluacion" element={
-              user && canAccess(PaginasApp.EVALUACION)
+              user && canAccess(PaginasApp.AVANCES)
                 ? <MainLayout user={user}><AvancesPage user={user} /></MainLayout>
                 : <Navigate to={user ? defaultPath : '/login'} replace />
             } />

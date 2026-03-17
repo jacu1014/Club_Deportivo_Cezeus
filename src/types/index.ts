@@ -1,64 +1,112 @@
 // src/types/index.ts
 
 export enum RolUsuario {
-  SUPER_ADMIN = 'SUPER_ADMIN',
+  SUPER_ADMIN    = 'SUPER_ADMIN',
   ADMINISTRATIVO = 'ADMINISTRATIVO',
-  ENTRENADOR = 'ENTRENADOR',
-  DIRECTOR = 'DIRECTOR',
-  ALUMNO = 'ALUMNO'
+  ENTRENADOR     = 'ENTRENADOR',
+  DIRECTOR       = 'DIRECTOR',
+  ALUMNO         = 'ALUMNO'
 }
 
 export enum PaginasApp {
-  DASHBOARD = 'dashboard',
-  ALUMNOS = 'alumnos',
-  AVANCES = 'avances',
-  PAGOS = 'pagos',
-  CALENDARIO = 'calendar_today',
+  DASHBOARD      = 'dashboard',
+  ALUMNOS        = 'alumnos',
+  // FIX: se agrega EVALUACION como alias de AVANCES para mantener compatibilidad
+  // con el Sidebar y App.jsx que lo usan indistintamente
+  AVANCES        = 'avances',
+  EVALUACION     = 'avances',   // ← mismo valor que AVANCES — resuelve la pérdida de permisos
+  PAGOS          = 'pagos',
+  CALENDARIO     = 'calendar_today',
   NOTIFICACIONES = 'notifications_active',
-  CONFIGURACION = 'settings',
-  NOSOTROS = 'info'
+  CONFIGURACION  = 'settings',
+  NOSOTROS       = 'info'
 }
 
-// Interfaces para TypeScript
 export interface Usuario {
-  id: string;
-  rol: RolUsuario;
-  email: string;
-  primer_nombre: string;
-  primer_apellido: string;
-  foto_url?: string;
-  fecha_inscripcion?: string;
+  id:                         string;
+  rol:                        RolUsuario;
+  email:                      string;
+  primer_nombre:              string;
+  segundo_nombre?:            string;
+  primer_apellido:            string;
+  segundo_apellido?:          string;
+  foto_url?:                  string;
+  telefono?:                  string;
+  estado?:                    string;
+  categoria?:                 string;
+  acepta_terminos?:           boolean;
+  fecha_nacimiento?:          string;
+  fecha_inscripcion?:         string;
+  tipo_documento?:            string;
+  numero_documento?:          string;
+  genero?:                    string;
+  direccion?:                 string;
+  eps?:                       string;
+  grupo_sanguineo?:           string;
+  factor_rh?:                 string;
+  condiciones_medicas?:       string;
+  acudiente_primer_nombre?:   string;
+  acudiente_segundo_nombre?:  string;
+  acudiente_primer_apellido?: string;
+  acudiente_segundo_apellido?:string;
+  acudiente_parentesco?:      string;
+  acudiente_telefono?:        string;
 }
 
-// Alias para que el Sidebar no de error
+// Alias para compatibilidad con componentes que usan User
 export interface User extends Usuario {}
 export type AppPages = PaginasApp;
 
-// Configuración de permisos: Qué ve cada quién
+// ─── Permisos por rol ─────────────────────────────────────────────────────────
+// IMPORTANTE: usar Object.values(PaginasApp) puede incluir duplicados (AVANCES y EVALUACION)
+// esto no causa problema porque el array de permisos simplemente tendrá el valor dos veces
 export const ROLE_PERMISSIONS: Record<string, PaginasApp[]> = {
-  // Permisos Totales
-  [RolUsuario.SUPER_ADMIN]: Object.values(PaginasApp),
-  [RolUsuario.DIRECTOR]: Object.values(PaginasApp),
-  [RolUsuario.ADMINISTRATIVO]: Object.values(PaginasApp),
-
-  // Permisos Limitados para Entrenador
+  [RolUsuario.SUPER_ADMIN]: [
+    PaginasApp.DASHBOARD,
+    PaginasApp.ALUMNOS,
+    PaginasApp.AVANCES,
+    PaginasApp.PAGOS,
+    PaginasApp.CALENDARIO,
+    PaginasApp.NOTIFICACIONES,
+    PaginasApp.CONFIGURACION,
+    PaginasApp.NOSOTROS,
+  ],
+  [RolUsuario.DIRECTOR]: [
+    PaginasApp.DASHBOARD,
+    PaginasApp.ALUMNOS,
+    PaginasApp.AVANCES,
+    PaginasApp.PAGOS,
+    PaginasApp.CALENDARIO,
+    PaginasApp.NOTIFICACIONES,
+    PaginasApp.CONFIGURACION,
+    PaginasApp.NOSOTROS,
+  ],
+  [RolUsuario.ADMINISTRATIVO]: [
+    PaginasApp.DASHBOARD,
+    PaginasApp.ALUMNOS,
+    PaginasApp.AVANCES,
+    PaginasApp.PAGOS,
+    PaginasApp.CALENDARIO,
+    PaginasApp.NOTIFICACIONES,
+    PaginasApp.CONFIGURACION,
+    PaginasApp.NOSOTROS,
+  ],
   [RolUsuario.ENTRENADOR]: [
-    PaginasApp.DASHBOARD, 
-    PaginasApp.ALUMNOS, 
-    PaginasApp.EVALUACION,
-    PaginasApp.PAGOS, // <-- AHORA INCLUIDO PARA VER MOVIMIENTOS PROPIOS
+    PaginasApp.DASHBOARD,
+    PaginasApp.ALUMNOS,
+    PaginasApp.AVANCES,
+    PaginasApp.PAGOS,
     PaginasApp.CALENDARIO,
     PaginasApp.CONFIGURACION,
-    PaginasApp.NOSOTROS
+    PaginasApp.NOSOTROS,
   ],
-
-  // Permisos Mínimos para Alumno
   [RolUsuario.ALUMNO]: [
     PaginasApp.DASHBOARD,
     PaginasApp.ALUMNOS,
-    PaginasApp.PAGOS, // <-- AHORA INCLUIDO PARA VER PAGOS PERSONALES
+    PaginasApp.AVANCES,
+    PaginasApp.PAGOS,
     PaginasApp.CALENDARIO,
     PaginasApp.CONFIGURACION,
-    PaginasApp.NOSOTROS
-  ]
+    PaginasApp.NOSOTROS,
+  ],
 };
