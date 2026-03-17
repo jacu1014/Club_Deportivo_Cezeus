@@ -6,7 +6,7 @@ const HORARIOS = [
 ];
 
 const COSTOS = [
-  { nombre: 'Matrícula',    nota: 'Pago único',             valor: '$15.000' },
+  { nombre: 'Matrícula',    nota: 'Pago único',             valor: '$20.000' },
   { nombre: 'Mensualidad',  nota: 'Primeros 5 días del mes', valor: '$90.000' },
   { nombre: 'Uniforme',     nota: 'Obligatorio para clases', valor: '$90.000' },
 ];

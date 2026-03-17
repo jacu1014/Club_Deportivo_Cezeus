@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 const CONTACTOS = [
   { icon: '📞', label: 'Coordinador',   nombre: 'Lic. Cesar Ceballos', tel: '3134185403' },
-  { icon: '👩‍💼', label: 'Coordinadora', nombre: 'Gloria E. Urrego',    tel: '3313540606' },
+  { icon: '👩‍💼', label: 'Coordinadora', nombre: 'Gloria Urrego',    tel: '313540606' },
 ];
 
 export default function ContactoSection() {
@@ -54,7 +54,7 @@ export default function ContactoSection() {
               <span className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl flex-shrink-0">📍</span>
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Ubicación</div>
-                <div className="font-black text-[20px] italic">Bogotá, Colombia</div>
+                <div className="font-black text-[20px] italic">C.C. Diver Plaza Bogotá, Colombia</div>
                 <div className="text-slate-400 text-[14px]">Resolución 460 I.D.R.D.</div>
               </div>
             </div>

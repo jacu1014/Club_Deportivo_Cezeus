@@ -12,7 +12,7 @@ export default function LandingFooter() {
               CE<span className="text-primary">ZEUS</span>
             </div>
             <p className="text-slate-400 text-[14px] leading-relaxed max-w-xs">
-              Formando campeones de vida a través del deporte desde hace más de 25 años en Bogotá.
+              Formando campeones de vida a través del deporte desde hace más de 10 años en Bogotá.
             </p>
             <p className="text-primary/50 text-[10px] font-black uppercase tracking-widest mt-3">
               Resolución 460 I.D.R.D. · Bogotá, Colombia
@@ -34,7 +34,7 @@ export default function LandingFooter() {
         </div>
 
         <div className="border-t border-white/5 pt-6 flex justify-between items-center flex-wrap gap-4">
-          <p className="text-slate-500 text-[13px]">© 2025 Club Deportivo Cezeus. Todos los derechos reservados.</p>
+          <p className="text-slate-500 text-[13px]">© 2026 Club Deportivo Cezeus. Todos los derechos reservados.</p>
           <p className="text-slate-500 text-[13px]">Hecho con ❤️ en Bogotá, Colombia</p>
         </div>
       </div>

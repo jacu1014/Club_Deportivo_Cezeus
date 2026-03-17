@@ -49,7 +49,7 @@ export default function HeroSection({ fotos = [] }) {
             {/* Stats */}
             <div className="flex gap-10">
               {[
-                { num: '+25', label: 'Años de historia' },
+                { num: '+10', label: 'Años de historia' },
                 { num: '3',   label: 'Categorías' },
                 { num: '100%',label: 'Entrenadores licenciados' },
               ].map(s => (
