@@ -1,66 +1,90 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// supabase/functions/admin-action/index.ts
+// FIX: se agregan headers CORS para permitir peticiones desde el dominio de producción
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 Deno.serve(async (req) => {
-  // Verificar que viene con sesion activa
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'No autorizado' }), { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    })
+
+  // Preflight CORS — el navegador lo envía antes de cada petición real
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  // Validar el token del usuario que llama
+  // Verificar sesión activa
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ error: 'No autorizado' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Validar token del usuario que llama
   const supabaseUser = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY')!,
     { global: { headers: { Authorization: authHeader } } }
-  )
+  );
 
-  const { data: { user }, error: authError } = await supabaseUser.auth.getUser()
+  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Sesion invalida' }), { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({ error: 'Sesión inválida' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
-  // Cliente admin — SERVICE_ROLE_KEY solo vive aqui en el servidor
+  // Cliente admin — SERVICE_ROLE_KEY solo vive aquí en el servidor
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
+  );
 
-  const { accion, datos } = await req.json()
+  const { accion, datos } = await req.json();
 
-  // Crear usuario (usado en ModalUsuario / StaffSection)
+  // Crear usuario
   if (accion === 'crear-usuario') {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: datos.email,
-      password: datos.password,
+      email:         datos.email,
+      password:      datos.password,
       email_confirm: true,
-      user_metadata: datos.user_metadata || {}
-    })
-    return Response.json({ data, error })
+      user_metadata: datos.user_metadata || {},
+    });
+    return new Response(
+      JSON.stringify({ data, error }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   // Eliminar usuario
   if (accion === 'eliminar-usuario') {
-    const { data, error } = await supabaseAdmin.auth.admin.deleteUser(datos.userId)
-    return Response.json({ data, error })
+    const { data, error } = await supabaseAdmin.auth.admin.deleteUser(datos.userId);
+    return new Response(
+      JSON.stringify({ data, error }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
-  // Actualizar rol de usuario
+  // Actualizar rol
   if (accion === 'actualizar-rol') {
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
       datos.userId,
       { user_metadata: { rol: datos.rol } }
-    )
-    return Response.json({ data, error })
+    );
+    return new Response(
+      JSON.stringify({ data, error }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
-  return new Response(JSON.stringify({ error: 'Accion no reconocida' }), { 
-    status: 400,
-    headers: { 'Content-Type': 'application/json' }
-  })
-})
+  return new Response(
+    JSON.stringify({ error: 'Acción no reconocida' }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+});
