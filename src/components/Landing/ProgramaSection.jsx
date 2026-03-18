@@ -20,7 +20,7 @@ export default function ProgramaSection() {
             <span className="w-6 h-0.5 bg-primary inline-block" /> Información Práctica
           </p>
           <h2 className="font-black italic text-[clamp(40px,5vw,64px)] leading-none">
-            HORARIOS <span className="text-primary">&amp; COSTOS</span>
+            HORA <span className="text-primary">&amp; RIOS</span>
           </h2>
         </div>
 
@@ -41,21 +41,6 @@ export default function ProgramaSection() {
               ⏰ Presentarse 10 min antes
             </p>
           </div>
-
-          {/* Costos */}
-          <div className="bg-[#0E1620] border border-white/6 rounded-[20px] p-9">
-            <h3 className="font-black text-[20px] uppercase italic tracking-wide mb-6">Inversión</h3>
-            {COSTOS.map(c => (
-              <div key={c.nombre} className="flex justify-between items-center py-4 border-b border-white/5">
-                <div>
-                  <div className="font-bold text-[15px]">{c.nombre}</div>
-                  <div className="text-slate-400 text-[12px]">{c.nota}</div>
-                </div>
-                <span className="font-black text-[26px] italic text-primary">{c.valor}</span>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* CTA inscripción */}
         <div className="bg-gradient-to-r from-primary/8 to-primary/2 border border-primary/20 rounded-[20px] p-10

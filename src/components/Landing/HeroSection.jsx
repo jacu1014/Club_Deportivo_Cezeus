@@ -28,7 +28,7 @@ export default function HeroSection({ fotos = [] }) {
             </h1>
 
             <p className="text-slate-400 text-lg leading-relaxed max-w-md mb-10">
-              Más de dos décadas formando niños y jóvenes a través del fútbol,
+              Más de una décadas formando niños y jóvenes a través del fútbol,
               infundiendo valores, disciplina y amor por el deporte.
               Categorías para edades de <strong className="text-white">5 a 13 años</strong>.
             </p>
