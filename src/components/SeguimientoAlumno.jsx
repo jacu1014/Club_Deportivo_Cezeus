@@ -82,7 +82,7 @@ const SeguimientoAlumno = ({
       const catAlumno      = normalizar(a.categoria);
       const catFiltro      = normalizar(filtroCategoria);
       const matchCategoria = filtroCategoria === 'TODOS' || catAlumno.includes(catFiltro);
-      const matchEstado    = (a.estado || 'ACTIVO').toUpperCase() === (filtroEstado === 'ACTIVOS' ? 'ACTIVO' : 'INACTIVO');
+      const matchEstado    = (a.estado || 'Activo').toLowerCase() === (filtroEstado === 'ACTIVOS' ? 'activo' : 'inactivo');
       return matchBusqueda && matchCategoria && matchEstado;
     });
   }, [alumnos, busqueda, filtroCategoria, filtroEstado]);
@@ -92,7 +92,7 @@ const SeguimientoAlumno = ({
     const criterioNorm = normalizar(catLabel);
     return alumnos.filter(a => normalizar(a.categoria).includes(criterioNorm)).length;
   };
-  const countEst = (est) => alumnos.filter(a => (a.estado || 'ACTIVO').toUpperCase() === est).length;
+  const countEst = (est) => alumnos.filter(a => (a.estado || 'Activo').toLowerCase() === est.toLowerCase()).length;
 
   // Datos para el radar
   // Prioridad: último ciclo con eval FINAL; fallback: INICIO más reciente
@@ -159,7 +159,7 @@ const SeguimientoAlumno = ({
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {['TODOS', 'INICIACIÓN', 'INFANTIL', 'TRANSICIÓN'].map(cat => (
+            {['TODOS', 'Iniciación', 'Infantil', 'Transición'].map(cat => (
               <button key={cat} onClick={() => setFiltroCategoria(cat)}
                       className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-3 border
                         ${filtroCategoria === cat ? 'bg-primary border-primary text-black' : 'bg-[#0a0f18]/40 border-white/5 text-slate-500 hover:border-white/20'}`}>
@@ -248,7 +248,7 @@ const SeguimientoAlumno = ({
         {/* Card perfil */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <div className={`h-24 bg-gradient-to-b ${alumno.estado === 'ACTIVO' ? 'from-emerald-500/10' : 'from-rose-500/10'} to-transparent`} />
+          <div className={`h-24 bg-gradient-to-b ${alumno.estado?.toLowerCase() === 'activo' ? 'from-emerald-500/10' : 'from-rose-500/10'} to-transparent`} />
           <div className="px-8 pb-8">
             <div className="relative -mt-12 mb-6 flex justify-center lg:justify-start">
               <img
@@ -257,7 +257,7 @@ const SeguimientoAlumno = ({
                 alt="Perfil"
               />
               <div className={`absolute -bottom-2 lg:left-24 px-3 py-1 rounded-full text-[9px] font-black uppercase shadow-lg
-                               ${alumno.estado === 'ACTIVO' ? 'bg-emerald-500 text-black' : 'bg-rose-500 text-white'}`}>
+                               ${alumno.estado?.toLowerCase() === 'activo' ? 'bg-emerald-500 text-black' : 'bg-rose-500 text-white'}`}>
                 {alumno.estado || 'ACTIVO'}
               </div>
             </div>
