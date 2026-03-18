@@ -1,13 +1,8 @@
 // src/lib/supabaseAdmin.js
-// Ejecuta acciones administrativas a través de la Edge Function admin-action.
-// La SERVICE_ROLE_KEY nunca toca el navegador — vive solo en la Edge Function.
-
 import { supabase } from './supabaseClient';
 
 export const adminAction = async (accion, datos = {}) => {
-  // FIX: obtener el token de sesión explícitamente y enviarlo en el header
-  // supabase.functions.invoke() a veces no propaga el Authorization header
-  // cuando se llama desde dominios de producción diferentes al de Supabase
+  // Obtener sesión activa
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
@@ -15,7 +10,11 @@ export const adminAction = async (accion, datos = {}) => {
   }
 
   const { data, error } = await supabase.functions.invoke('admin-action', {
-    body: { accion, datos },
+    body: {
+      accion,
+      datos,
+      token: session.access_token, // fallback por si el header no llega
+    },
     headers: {
       Authorization: `Bearer ${session.access_token}`,
     },
