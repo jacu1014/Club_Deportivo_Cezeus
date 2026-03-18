@@ -34,7 +34,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         .from('usuarios')
         .select('id, primer_nombre, primer_apellido, categoria, foto_url, numero_documento')
         .eq('rol', 'ALUMNO')
-        .eq('estado', 'ACTIVO')
+        .ilike('estado', 'activo')  // FIX: case-insensitive — BD guarda 'Activo'
         .order('primer_apellido');
 
       if (ciclo.categoria !== 'TODAS') {
