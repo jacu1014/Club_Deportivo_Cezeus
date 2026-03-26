@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { supabase } from './lib/supabaseClient';
 import { ROLE_PERMISSIONS, PaginasApp } from './types';
 import { Analytics } from '@vercel/analytics/react';
+import { injectSpeedInsights } from '@vercel/speed-insights';
 import Login         from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import MainLayout    from './layouts/MainLayout';
@@ -60,6 +61,11 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [legalText, setLegalText] = useState(null);
   const isUserLoaded = useRef(Boolean(loadProfile()));
+
+  // Initialize Vercel Speed Insights
+  useEffect(() => {
+    injectSpeedInsights();
+  }, []);
 
   // FIX: canAccess usa PaginasApp correctamente
   // Si PaginasApp.EVALUACION no existe en types, canAccess devuelve false
