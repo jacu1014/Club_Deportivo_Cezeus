@@ -6,6 +6,7 @@ import es from 'date-fns/locale/es';
 import { generarReporteAsistencia } from '../services/reporteAsistencia';
 import AttendanceChart from '../components/AttendanceChart';
 import { usePageLog } from '../hooks/usePageLog';
+import AlertasPago from '../components/AlertasPago';
 import { registrarLog } from '../lib/activity';
 
 const DashboardPage = ({ user }) => {
@@ -321,6 +322,9 @@ const DashboardPage = ({ user }) => {
             </div>
           </div>
         )}
+
+        {/* ── ALERTAS DE PAGO ── */}
+        <AlertasPago currentUser={user} />
 
         <ModalAsistencia
           isOpen={isModalOpen}
