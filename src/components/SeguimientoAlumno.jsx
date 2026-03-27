@@ -34,6 +34,7 @@ const SeguimientoAlumno = ({
   // Evaluaciones del alumno seleccionado
   const [evaluaciones, setEvals]        = useState([]);
   const [loadingEvals, setLoadingEvals] = useState(false);
+  const [errorEvals, setErrorEvals]     = useState(null);
   const [itemsPorCiclo, setItemsPorCiclo] = useState({});
 
   const canManage = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'ENTRENADOR', 'DIRECTOR'].includes(currentUser?.rol);
@@ -45,6 +46,7 @@ const SeguimientoAlumno = ({
   useEffect(() => {
     if (!alumno?.id) return;
     setLoadingEvals(true);
+    setErrorEvals(null);
     fetchEvaluacionesAlumno(alumno.id)
       .then(async (evals) => {
         setEvals(evals);
@@ -53,12 +55,20 @@ const SeguimientoAlumno = ({
         const ciclosIds = [...new Set(evals.map(e => e.ciclo_id))];
         const itemsMap = {};
         for (const cicloId of ciclosIds) {
-          const items = await getItemsConCategorias(cicloId);
-          itemsMap[cicloId] = items;
+          try {
+            const items = await getItemsConCategorias(cicloId);
+            itemsMap[cicloId] = items || [];
+          } catch (err) {
+            console.error('Error cargando items para ciclo', cicloId, err);
+            itemsMap[cicloId] = [];
+          }
         }
         setItemsPorCiclo(itemsMap);
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error('Error fetching evaluaciones:', err);
+        setErrorEvals('Error al cargar las evaluaciones');
+      })
       .finally(() => setLoadingEvals(false));
   }, [alumno?.id, fetchEvaluacionesAlumno, getItemsConCategorias]);
 
@@ -104,7 +114,7 @@ const SeguimientoAlumno = ({
 
   // Calcular promedios por categoría para una evaluación
   const calcularPromediosPorCategoria = (evaluacion, itemsDelCiclo) => {
-    if (!evaluacion || !evaluacion.items) return {};
+    if (!evaluacion || !evaluacion.items || evaluacion.items.length === 0) return {};
     
     const promedios = {};
     const itemsPorCat = {};
@@ -141,8 +151,14 @@ const SeguimientoAlumno = ({
     
     const itemsDelCiclo = itemsPorCiclo[ultimaEval.ciclo_id] || [];
     
+    // Si no hay items en el ciclo, no podemos mostrar el radar
+    if (itemsDelCiclo.length === 0) return [];
+    
     // Obtener categorías únicas de este ciclo
     const categorias = [...new Set(itemsDelCiclo.map(i => i.categoria?.nombre).filter(Boolean))];
+    
+    // Si no hay categorías, no mostrar radar
+    if (categorias.length === 0) return [];
     
     // Buscar evaluación del mismo ciclo pero de tipo INICIAL para comparar
     const evalInicioDelMismoCiclo = evaluaciones.find(
@@ -176,6 +192,24 @@ const SeguimientoAlumno = ({
     );
     return evaluacionesOrdenadas[0]?.ciclo;
   }, [evaluaciones]);
+
+  // Si hay error en evaluaciones, mostrar mensaje
+  if (errorEvals) {
+    return (
+      <div className="max-w-[1400px] mx-auto p-4">
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-8 text-center">
+          <span className="material-symbols-outlined text-4xl text-rose-400 mb-2">error</span>
+          <p className="text-rose-400 text-[10px] font-black uppercase">{errorEvals}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 text-primary text-[10px] underline"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !alumno) {
     return (
@@ -352,9 +386,12 @@ const SeguimientoAlumno = ({
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Sin evaluaciones aún
               </p>
+              <p className="text-[8px] text-slate-600 text-center">
+                El alumno no tiene evaluaciones o el ciclo no tiene items configurados
+              </p>
             </div>
           ) : (
-            <div className="flex-1 min-h-[260px]">
+            <div className="flex-1" style={{ minHeight: '260px', height: '260px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid stroke="#ffffff10" />

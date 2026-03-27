@@ -17,14 +17,24 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
   const [evaluaciones, setEvals] = useState([]);
   const [itemsCiclo, setItemsCiclo] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorItems, setErrorItems] = useState(null);
   const [alumnoDetalle, setDetalle] = useState(null);
 
   // Cargar items del ciclo
   useEffect(() => {
     if (!ciclo?.id) return;
+    setErrorItems(null);
     getItemsConCategorias(ciclo.id)
-      .then(setItemsCiclo)
-      .catch(console.error);
+      .then(items => {
+        if (!items || items.length === 0) {
+          setErrorItems('Este ciclo no tiene items configurados');
+        }
+        setItemsCiclo(items || []);
+      })
+      .catch(err => {
+        console.error('Error cargando items:', err);
+        setErrorItems('Error al cargar los items del ciclo');
+      });
   }, [ciclo?.id, getItemsConCategorias]);
 
   // Cargar evaluaciones del ciclo
@@ -34,6 +44,40 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [ciclo.id, fetchEvaluacionesCiclo]);
+
+  // Si hay error con los items, mostrar mensaje
+  if (errorItems) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="flex items-center gap-4">
+          <button onClick={onVolver}
+                  className="flex items-center gap-2 text-[10px] font-black text-slate-500
+                             hover:text-primary transition-all uppercase tracking-widest">
+            <span className="material-symbols-outlined text-sm">arrow_back</span>
+            Volver
+          </button>
+          <div>
+            <h3 className="font-black text-white uppercase italic text-base">
+              Resumen: <span className="text-primary">{ciclo.nombre}</span>
+            </h3>
+          </div>
+        </div>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-8 text-center">
+          <span className="material-symbols-outlined text-4xl text-amber-400 mb-2">warning</span>
+          <p className="text-amber-400 text-[10px] font-black uppercase">{errorItems}</p>
+          <p className="text-slate-400 text-[8px] mt-2">
+            No se puede mostrar el resumen porque el ciclo no tiene items configurados.
+          </p>
+          <button 
+            onClick={onVolver}
+            className="mt-4 text-primary text-[10px] underline hover:text-primary/80"
+          >
+            Volver al ciclo
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Agrupar evaluaciones por alumno y calcular promedios por categoría
   const alumnosMap = useMemo(() => {

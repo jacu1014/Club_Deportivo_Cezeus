@@ -19,7 +19,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const [loadingAlumnos, setLoadingA] = useState(true);
   const [alumno, setAlumno] = useState(alumnoInicial || null);
   const [busqueda, setBusqueda] = useState('');
-  const [tipo, setTipo] = useState('INICIAL'); // Cambiado de 'INICIO' a 'INICIAL'
+  const [tipo, setTipo] = useState('INICIAL');
   const [itemsCiclo, setItemsCiclo] = useState([]);
   const [valores, setValores] = useState({});
   const [observaciones, setObservaciones] = useState('');
@@ -27,6 +27,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const [saving, setSaving] = useState(false);
   const [evalExistente, setEvalExistente] = useState(null);
   const [loadingItems, setLoadingItems] = useState(true);
+  const [errorItems, setErrorItems] = useState(null);
   const [categoriaActiva, setCategoriaActiva] = useState(null);
 
   // Agrupar items por categoría
@@ -55,34 +56,54 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     }
   }, [categoriasList]);
 
-  // Cargar alumnos filtrados por categoría del ciclo (si el ciclo tiene categoría)
+  // Cargar alumnos filtrados por categoría del ciclo
   useEffect(() => {
     const fetchAlumnos = async () => {
       setLoadingA(true);
-      let query = supabase
-        .from('usuarios')
-        .select('id, primer_nombre, primer_apellido, categoria, foto_url, numero_documento')
-        .eq('rol', 'ALUMNO')
-        .ilike('estado', 'activo')
-        .order('primer_apellido');
+      try {
+        let query = supabase
+          .from('usuarios')
+          .select('id, primer_nombre, primer_apellido, categoria, foto_url, numero_documento')
+          .eq('rol', 'ALUMNO')
+          .ilike('estado', 'activo')
+          .order('primer_apellido');
 
-      // Si el ciclo tiene campo categoria, filtrar (por compatibilidad)
-      if (ciclo.categoria && ciclo.categoria !== 'TODAS') {
-        query = query.ilike('categoria', `%${ciclo.categoria}%`);
+        if (ciclo.categoria && ciclo.categoria !== 'TODAS') {
+          query = query.ilike('categoria', `%${ciclo.categoria}%`);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        setAlumnos(data || []);
+      } catch (err) {
+        console.error('Error cargando alumnos:', err);
+      } finally {
+        setLoadingA(false);
       }
-      const { data } = await query;
-      setAlumnos(data || []);
-      setLoadingA(false);
     };
     fetchAlumnos();
   }, [ciclo.categoria]);
 
   // Cargar items del ciclo cuando se selecciona un ciclo
   useEffect(() => {
-    if (!ciclo?.id) return;
+    if (!ciclo?.id) {
+      console.log('No hay ciclo ID');
+      return;
+    }
+    
+    console.log('Cargando items para ciclo:', ciclo.id);
     setLoadingItems(true);
+    setErrorItems(null);
+    
     getItemsConCategorias(ciclo.id)
       .then(items => {
+        console.log('Items recibidos:', items);
+        
+        if (!items || items.length === 0) {
+          setErrorItems('Este ciclo no tiene items configurados. Debes agregar items al crear el ciclo.');
+          setItemsCiclo([]);
+          return;
+        }
+        
         setItemsCiclo(items);
         // Inicializar valores por defecto (50 para cada item)
         const initial = {};
@@ -91,45 +112,54 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         });
         setValores(initial);
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error('Error al cargar items:', err);
+        setErrorItems('Error al cargar los items: ' + (err.message || 'Error de conexión'));
+      })
       .finally(() => setLoadingItems(false));
   }, [ciclo?.id, getItemsConCategorias]);
 
   // Buscar evaluación existente cuando cambia alumno o tipo
   useEffect(() => {
-    if (!alumno?.id || !ciclo?.id || loadingItems) return;
+    if (!alumno?.id || !ciclo?.id || loadingItems || errorItems) return;
     
-    fetchEvaluacionesAlumno(alumno.id).then(evals => {
-      const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
-      setEvalExistente(existente || null);
-      
-      if (existente) {
-        // Cargar valores existentes
-        const loaded = {};
-        if (existente.items && existente.items.length > 0) {
-          existente.items.forEach(item => {
-            loaded[item.ciclo_item_id] = item.calificacion;
-          });
-        }
-        setValores(loaded);
-        setObservaciones(existente.observaciones || '');
-        setMensajePersonalizado(existente.mensaje_personalizado || '');
-      } else {
-        // Resetear valores por defecto
-        const reset = {};
-        itemsCiclo.forEach(item => {
-          reset[item.id] = 50;
-        });
-        setValores(reset);
-        setObservaciones('');
+    console.log('Buscando evaluación existente para alumno:', alumno.id, 'tipo:', tipo);
+    
+    fetchEvaluacionesAlumno(alumno.id)
+      .then(evals => {
+        console.log('Evaluaciones del alumno:', evals);
+        const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
+        setEvalExistente(existente || null);
         
-        // Calcular mensaje automático basado en promedio inicial (50)
-        const promedioInicial = 50;
-        const mensajeAuto = obtenerMensajePorPromedio(promedioInicial);
-        setMensajePersonalizado(mensajeAuto);
-      }
-    }).catch(console.error);
-  }, [alumno?.id, tipo, ciclo?.id, itemsCiclo, loadingItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio]);
+        if (existente) {
+          // Cargar valores existentes
+          const loaded = {};
+          if (existente.items && existente.items.length > 0) {
+            existente.items.forEach(item => {
+              loaded[item.ciclo_item_id] = item.calificacion;
+            });
+          }
+          setValores(loaded);
+          setObservaciones(existente.observaciones || '');
+          setMensajePersonalizado(existente.mensaje_personalizado || '');
+        } else {
+          // Resetear valores por defecto
+          const reset = {};
+          itemsCiclo.forEach(item => {
+            reset[item.id] = 50;
+          });
+          setValores(reset);
+          setObservaciones('');
+          
+          // Calcular mensaje automático basado en promedio inicial (50)
+          const mensajeAuto = obtenerMensajePorPromedio(50);
+          setMensajePersonalizado(mensajeAuto);
+        }
+      })
+      .catch(err => {
+        console.error('Error al buscar evaluaciones:', err);
+      });
+  }, [alumno?.id, tipo, ciclo?.id, itemsCiclo, loadingItems, errorItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio]);
 
   // Calcular promedio actual en tiempo real
   const promedioActual = useMemo(() => {
@@ -141,11 +171,11 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
   // Actualizar mensaje automático cuando cambia el promedio
   useEffect(() => {
-    if (!evalExistente) {
+    if (!evalExistente && itemsCiclo.length > 0) {
       const mensajeAuto = obtenerMensajePorPromedio(promedioActual);
       setMensajePersonalizado(mensajeAuto);
     }
-  }, [promedioActual, obtenerMensajePorPromedio, evalExistente]);
+  }, [promedioActual, obtenerMensajePorPromedio, evalExistente, itemsCiclo.length]);
 
   const handleSlider = (itemId, val) => {
     setValores(prev => ({ ...prev, [itemId]: Number(val) }));
@@ -153,6 +183,11 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
   const handleGuardar = async () => {
     if (!alumno) return;
+    if (itemsCiclo.length === 0) {
+      onGuardado('No hay items para evaluar en este ciclo.', 'error');
+      return;
+    }
+    
     setSaving(true);
     try {
       // Preparar items para guardar
@@ -178,6 +213,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       setAlumno(null);
       setEvalExistente(null);
     } catch (e) {
+      console.error('Error guardando evaluación:', e);
       onGuardado('Error: ' + e.message, 'error');
     } finally {
       setSaving(false);
@@ -274,10 +310,48 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
+  // Estado de carga de items
   if (loadingItems) {
     return (
       <div className="py-20 text-center text-primary animate-pulse font-black uppercase text-[10px] tracking-[0.5em]">
         Cargando items de evaluación...
+      </div>
+    );
+  }
+
+  // Estado de error de items
+  if (errorItems) {
+    return (
+      <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-8 text-center">
+        <span className="material-symbols-outlined text-4xl text-rose-400 mb-2">error</span>
+        <p className="text-rose-400 text-[10px] font-black uppercase">{errorItems}</p>
+        <button 
+          onClick={onVolver}
+          className="mt-4 text-primary text-[10px] underline hover:text-primary/80"
+        >
+          Volver al ciclo
+        </button>
+      </div>
+    );
+  }
+
+  // Si no hay items después de cargar
+  if (itemsCiclo.length === 0) {
+    return (
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-8 text-center">
+        <span className="material-symbols-outlined text-4xl text-amber-400 mb-2">info</span>
+        <p className="text-amber-400 text-[10px] font-black uppercase">
+          Este ciclo no tiene items configurados.
+        </p>
+        <p className="text-slate-400 text-[8px] mt-2">
+          Debes editar el ciclo y agregar items para poder evaluar.
+        </p>
+        <button 
+          onClick={onVolver}
+          className="mt-4 text-primary text-[10px] underline hover:text-primary/80"
+        >
+          Volver al ciclo
+        </button>
       </div>
     );
   }
@@ -349,18 +423,20 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 space-y-5">
 
           {/* Tabs de categorías */}
-          <div className="flex flex-wrap gap-2">
-            {categoriasList.map(cat => (
-              <button key={cat} onClick={() => setCategoriaActiva(cat)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black
-                                   uppercase tracking-widest border transition-all
-                                   ${categoriaActiva === cat
-                                     ? 'bg-white/10 border-white/20 text-white'
-                                     : 'bg-transparent border-transparent text-slate-600 hover:text-slate-400'}`}>
-                {cat}
-              </button>
-            ))}
-          </div>
+          {categoriasList.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {categoriasList.map(cat => (
+                <button key={cat} onClick={() => setCategoriaActiva(cat)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black
+                                     uppercase tracking-widest border transition-all
+                                     ${categoriaActiva === cat
+                                       ? 'bg-white/10 border-white/20 text-white'
+                                       : 'bg-transparent border-transparent text-slate-600 hover:text-slate-400'}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Sliders de la categoría activa */}
           <div className="space-y-5">
@@ -400,7 +476,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 italic">
               Vista previa por categorías
             </p>
-            <div className="h-[220px]">
+            <div style={{ height: '220px', minHeight: '220px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid stroke="#ffffff10" />
