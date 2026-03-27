@@ -270,7 +270,7 @@ export default function AlertasPago({ currentUser }) {
       )}
     </div>
   );
-
+}
 // ─── Fila individual ─────────────────────────────────────────────────────────
 function FilaAlumno({ alumno }) {
   const pendiente  = alumno.pago?.estado === 'PENDIENTE';
