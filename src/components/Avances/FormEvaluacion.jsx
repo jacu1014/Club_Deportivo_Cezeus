@@ -1,7 +1,7 @@
 // src/components/Avances/FormEvaluacion.jsx
 // VERSIÓN DINÁMICA - Con items personalizados por ciclo
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAvances } from '../../hooks/useAvances';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
@@ -168,15 +168,14 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     }
   }, [promedioActual, obtenerMensajePorPromedio, evalExistente, itemsCiclo.length]);
 
-  // Manejar cambio de slider - optimizado con useCallback
-  const handleSlider = useCallback((itemId, val) => {
-    const newValue = Number(val);
-    setValores(prev => {
-      // Solo actualizar si el valor cambió realmente
-      if (prev[itemId] === newValue) return prev;
-      return { ...prev, [itemId]: newValue };
-    });
-  }, []);
+  // Manejar cambio de slider
+  const handleSliderChange = (itemId, event) => {
+    const newValue = Number(event.target.value);
+    setValores(prev => ({
+      ...prev,
+      [itemId]: newValue
+    }));
+  };
 
   const handleGuardar = async () => {
     if (!alumno) return;
@@ -438,7 +437,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           {/* Sliders de la categoría activa */}
           <div className="space-y-5">
             {itemsActuales.map(item => {
-              const valorActual = valores[item.id] ?? 50;
+              const valorActual = valores[item.id] !== undefined ? valores[item.id] : 50;
               return (
                 <div key={item.id} className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -461,15 +460,45 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
                     max="100" 
                     step="5"
                     value={valorActual}
-                    onChange={(e) => handleSlider(item.id, e.target.value)}
+                    onChange={(e) => handleSliderChange(item.id, e)}
                     className="w-full accent-primary cursor-pointer"
                   />
                   <div className="flex justify-between text-[8px] text-slate-700 font-bold uppercase">
-                    <span>0</span>
-                    <span>25</span>
-                    <span>50</span>
-                    <span>75</span>
-                    <span>100</span>
+                    <button 
+                      type="button"
+                      onClick={() => handleSliderChange(item.id, { target: { value: 0 } })}
+                      className="hover:text-primary transition-colors"
+                    >
+                      0
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleSliderChange(item.id, { target: { value: 25 } })}
+                      className="hover:text-primary transition-colors"
+                    >
+                      25
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleSliderChange(item.id, { target: { value: 50 } })}
+                      className="hover:text-primary transition-colors"
+                    >
+                      50
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleSliderChange(item.id, { target: { value: 75 } })}
+                      className="hover:text-primary transition-colors"
+                    >
+                      75
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleSliderChange(item.id, { target: { value: 100 } })}
+                      className="hover:text-primary transition-colors"
+                    >
+                      100
+                    </button>
                   </div>
                 </div>
               );
