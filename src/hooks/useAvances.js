@@ -1,24 +1,25 @@
 // src/hooks/useAvances.js
-// VERSIÓN OPTIMIZADA: Con Caché, Comparativas y Lógica Centralizada
+// VERSIÓN RECTIFICADA: Ajustada a la estructura real de Supabase (Tablas dinámicas)
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { registrarLog } from '../lib/activity';
 
-// Objeto externo para persistir caché entre re-renders del hook
+// Caché externa para evitar saltos visuales al cambiar entre alumnos
 const cacheItems = {};
 
 export const useAvances = (currentUser) => {
   const [ciclos, setCiclos] = useState([]);
   const [loadingCiclos, setLoadingCiclos] = useState(true);
 
+  // 1. Cargar Ciclos de Evaluación
   const fetchCiclos = useCallback(async () => {
     setLoadingCiclos(true);
     try {
       const { data, error } = await supabase
-        .from('ciclos_avances')
+        .from('ciclos_evaluacion') // Nombre real de tu tabla
         .select('*')
         .order('created_at', { ascending: false });
+      
       if (error) throw error;
       setCiclos(data || []);
     } catch (err) {
@@ -32,8 +33,7 @@ export const useAvances = (currentUser) => {
     fetchCiclos();
   }, [fetchCiclos]);
 
-  /** * Obtiene items de un ciclo con CACHÉ para optimizar fluidez 
-   */
+  // 2. Obtener Ítems configurados para un ciclo (Dinámico)
   const getItemsConCategorias = useCallback(async (cicloId) => {
     if (!cicloId) return [];
     if (cacheItems[cicloId]) return cacheItems[cicloId];
@@ -41,9 +41,9 @@ export const useAvances = (currentUser) => {
     try {
       const { data, error } = await supabase
         .from('ciclos_items')
-        .select('*, categoria:categorias_base(*)')
+        .select('*')
         .eq('ciclo_id', cicloId)
-        .order('orden');
+        .order('orden', { ascending: true });
       
       if (error) throw error;
       cacheItems[cicloId] = data || [];
@@ -54,93 +54,88 @@ export const useAvances = (currentUser) => {
     }
   }, []);
 
-  /**
-   * Prepara datos para Radar Chart: Alumno (Inicial vs Final)
-   */
+  // 3. Guardar Evaluación Completa (Cabecera + Detalle)
+  const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas }) => {
+    try {
+      // A. Insertar en evaluaciones_avance (Cabecera)
+      const { data: evalCabecera, error: errCabecera } = await supabase
+        .from('evaluaciones_avance')
+        .insert([{
+          alumno_id,
+          ciclo_id,
+          entrenador_id: currentUser?.id,
+          tipo, // 'INICIAL' o 'FINAL'
+          fecha_evaluacion: new Date().toISOString().split('T')[0],
+          observaciones
+        }])
+        .select()
+        .single();
+
+      if (errCabecera) throw errCabecera;
+
+      // B. Preparar y insertar en evaluaciones_items (Detalle)
+      // 'notas' debe ser un objeto: { [ciclo_item_id]: calificacion }
+      const registrosNotas = Object.entries(notas).map(([itemId, valor]) => ({
+        evaluacion_id: evalCabecera.id,
+        ciclo_item_id: itemId,
+        calificacion: valor
+      }));
+
+      const { error: errNotas } = await supabase
+        .from('evaluaciones_items')
+        .insert(registrosNotas);
+
+      if (errNotas) throw errNotas;
+      
+      return evalCabecera;
+    } catch (err) {
+      console.error('Error en guardado completo:', err.message);
+      throw err;
+    }
+  };
+
+  // 4. Obtener Evaluaciones de un Ciclo (Para Resumen/Heatmap)
+  const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
+    try {
+      const { data, error } = await supabase
+        .from('evaluaciones_avance')
+        .select(`
+          *,
+          usuarios:alumno_id (id, primer_nombre, primer_apellido, foto_url),
+          evaluaciones_items (*)
+        `)
+        .eq('ciclo_id', cicloId);
+
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error('Error fetchEvaluacionesCiclo:', err.message);
+      return [];
+    }
+  }, []);
+
+  // 5. Helpers para Radar Chart
   const prepararDatosComparativos = (itemsCiclo, evalInicial, evalFinal) => {
     return itemsCiclo.map(item => {
-      const notaI = evalInicial?.items?.find(i => i.item_id === item.id)?.calificacion || 0;
-      const notaF = evalFinal?.items?.find(i => i.item_id === item.id)?.calificacion || 0;
+      const notaI = evalInicial?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
+      const notaF = evalFinal?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
       return {
         subject: item.nombre,
         inicial: notaI,
         final: notaF,
-        fullMark: 10,
+        fullMark: 100,
       };
     });
   };
 
-  /**
-   * Prepara datos para Radar Chart: Versus entre dos alumnos
-   */
-  const prepararVersus = (itemsCiclo, evalAlumnoA, evalAlumnoB) => {
-    return itemsCiclo.map(item => ({
-      subject: item.nombre,
-      alumnoA: evalAlumnoA?.items?.find(i => i.item_id === item.id)?.calificacion || 0,
-      alumnoB: evalAlumnoB?.items?.find(i => i.item_id === item.id)?.calificacion || 0,
-      fullMark: 10,
-    }));
-  };
-
-  /**
-   * Lógica de guardado con validación de ciclo activo
-   */
-  const guardarEvaluacion = async (payload, cicloActivo) => {
-    if (!cicloActivo) throw new Error("No se pueden crear evaluaciones en un ciclo cerrado.");
-    
-    const { data, error } = await supabase
-      .from('evaluaciones_procesos')
-      .upsert([payload])
-      .select();
-    
-    if (error) throw error;
-    return data;
-  };
-
-  // --- LOGICA DE OBSERVACIONES (Simplificada y fluida) ---
-
-  const fetchObservaciones = async (alumnoId) => {
-    const { data, error } = await supabase
-      .from('observaciones_seguimiento')
-      .select('*')
-      .eq('alumno_id', alumnoId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
-  };
-
-  const agregarObservacion = async (alumno_id, nota, categoria_nota) => {
-    const nombreAutor = `${currentUser?.primer_nombre || ''} ${currentUser?.primer_apellido || ''}`.trim();
-    const { data, error } = await supabase
-      .from('observaciones_seguimiento')
-      .insert([{
-        alumno_id,
-        autor_id: currentUser?.id,
-        autor_nombre: nombreAutor || 'Entrenador',
-        nota,
-        categoria_nota,
-      }])
-      .select().single();
-    if (error) throw error;
-    return data;
-  };
-
   return {
-    ciclos, 
-    loadingCiclos, 
+    ciclos,
+    loadingCiclos,
     fetchCiclos,
     getItemsConCategorias,
+    guardarEvaluacionCompleta,
+    fetchEvaluacionesCiclo,
     prepararDatosComparativos,
-    prepararVersus,
-    guardarEvaluacion,
-    fetchObservaciones,
-    agregarObservacion,
-    canEvaluar: ['SUPER_ADMIN', 'DIRECTOR', 'ENTRENADOR'].includes(currentUser?.rol),
-    categoriasBase: [
-      { id: 'tecnica', nombre: 'Técnica', icono: 'sports_soccer' },
-      { id: 'fisica', nombre: 'Física', icono: 'fitness_center' },
-      { id: 'tactica', nombre: 'Táctica', icono: 'strategy' },
-      { id: 'psicologica', nombre: 'Psicológica', icono: 'psychology' }
-    ]
+    canEvaluar: ['SUPER_ADMIN', 'DIRECTOR', 'ENTRENADOR'].includes(currentUser?.rol)
   };
 };
