@@ -272,67 +272,69 @@ export default function AlertasPago({ currentUser }) {
   );
 }
 // ─── Fila individual ─────────────────────────────────────────────────────────
+// ─── Fila individual ─────────────────────────────────────────────────────────
 function FilaAlumno({ alumno }) {
-  const pendiente  = alumno.pago?.estado === 'PENDIENTE';
+  const pendiente = alumno.pago?.estado === 'PENDIENTE';
   const fechaCorte = alumno.pago?.fechaCorte;
   const ultimoPago = alumno.pago?.ultimoPago;
-
-  const diasMora = pendiente && fechaCorte
-    ? Math.max(0, Math.floor((new Date() - fechaCorte) / (1000 * 60 * 60 * 24)))
+  
+  const diasMora = pendiente && fechaCorte 
+    ? Math.max(0, Math.floor((new Date() - fechaCorte) / 86400000)) 
     : 0;
 
   return (
-    <div className={`flex items-center gap-3 sm:gap-4 px-4 sm:px-8 py-4 sm:py-5 hover:bg-white/[0.02] transition-all
+    <div className={`flex items-center gap-3 sm:gap-4 px-4 sm:px-8 py-4 sm:py-5 hover:bg-white/[0.02] transition-all 
                      ${pendiente ? 'border-l-2 border-rose-500/40' : 'border-l-2 border-transparent'}`}>
-
-      {/* Avatar - Un poco más pequeño en móvil */}
-      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800 flex items-center justify-center
-                      font-black text-primary text-[10px] sm:text-sm border border-white/5 overflow-hidden flex-shrink-0">
-        {alumno.foto_url
-          ? <img src={alumno.foto_url} className="w-full h-full object-cover" alt="" />
-          : `${alumno.primer_nombre?.[0] || ''}${alumno.primer_apellido?.[0] || ''}`}
+      
+      {/* Avatar */}
+      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-slate-800 flex items-center justify-center font-black text-primary text-[10px] sm:text-sm border border-white/5 overflow-hidden flex-shrink-0">
+        {alumno.foto_url 
+          ? <img src={alumno.foto_url} className="w-full h-full object-cover" alt="" /> 
+          : `${alumno.primer_nombre?.[0]}${alumno.primer_apellido?.[0]}`}
       </div>
 
-      {/* Nombre e Info - min-w-0 es vital para que truncate no empuje lo demás */}
+      {/* Info Principal */}
       <div className="flex-1 min-w-0">
         <p className="font-black text-white text-[10px] sm:text-[11px] uppercase italic truncate leading-none">
           {alumno.primer_nombre} {alumno.primer_apellido}
         </p>
-        <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-1 leading-none">
-          {alumno.categoria} <span className="hidden xs:inline">· Corte: {fechaCorte ? getDate(fechaCorte) : '—'}</span>
-        </p>
+        
+        <div className="flex flex-col gap-0.5 mt-1">
+          <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-widest leading-none">
+            {alumno.categoria} <span className="hidden xs:inline">· Corte: {fechaCorte ? getDate(fechaCorte) : '—'}</span>
+          </p>
+          
+          {/* Nueva línea: Último pago visible en móvil */}
+          <p className="text-[7px] sm:text-[8px] md:hidden text-slate-500 font-medium uppercase leading-none">
+            Pago: {ultimoPago 
+              ? format(new Date(ultimoPago.fecha_pago), "d MMM", { locale: es }) 
+              : 'Sin registros'}
+          </p>
+        </div>
       </div>
 
-      {/* Último pago - Solo se muestra de Tablet en adelante */}
+      {/* Último pago - Versión Escritorio (más detallada) */}
       <div className="text-right hidden md:block flex-shrink-0">
         <p className="text-[8px] text-slate-600 font-bold uppercase">Último pago</p>
         <p className="text-[9px] text-slate-300 font-black">
-          {ultimoPago
-            ? format(new Date(ultimoPago.fecha_pago), "d MMM yyyy", { locale: es })
+          {ultimoPago 
+            ? format(new Date(ultimoPago.fecha_pago), "d MMM yyyy", { locale: es }) 
             : 'Sin registros'}
         </p>
       </div>
 
-      {/* Estado - Badge compacto para móvil */}
+      {/* Estado */}
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-        {pendiente ? (
-          <>
-            <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase tracking-widest
-                             text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full">
-              <span className="material-symbols-outlined text-[10px] sm:text-xs">warning</span>
-              <span className="hidden xxs:inline">Pendiente</span>
-            </span>
-            {diasMora > 0 && (
-              <span className="text-[7px] font-black text-rose-500/80 px-1 leading-none">
-                {diasMora}d mora
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase tracking-widest
-                           text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full">
-            <span className="material-symbols-outlined text-[10px] sm:text-xs">check_circle</span>
-            <span className="hidden xxs:inline">Al día</span>
+        <span className={`flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase px-2 py-1 rounded-md 
+                         ${pendiente ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'}`}>
+          <span className="material-symbols-outlined text-[10px] sm:text-xs">
+            {pendiente ? 'warning' : 'check_circle'}
+          </span>
+          {pendiente ? 'Pendiente' : 'Al día'}
+        </span>
+        {pendiente && diasMora > 0 && (
+          <span className="text-[7px] font-black text-rose-500/80 px-1 leading-none">
+            {diasMora}d mora
           </span>
         )}
       </div>
