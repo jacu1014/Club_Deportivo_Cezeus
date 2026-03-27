@@ -173,36 +173,40 @@ export default function AlertasPago({ currentUser }) {
   return (
     <div className="bg-[#0a0f18]/60 border border-white/5 rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden">
 
-      {/* Header - Optimizado para móvil */}
+      {/* Header - Ajustado para no colapsar en móvil */}
       <div className="px-4 py-5 sm:px-8 sm:py-6 border-b border-white/5 bg-white/[0.02]
                       flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-primary">payments</span>
           <div>
-            <p className="font-black text-[10px] sm:text-[11px] text-white uppercase tracking-widest">
+            <p className="font-black text-[10px] sm:text-[11px] text-white uppercase tracking-widest leading-none">
               Estado de Pagos
             </p>
-            <p className="text-slate-600 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mt-0.5">
-              {format(new Date(), "MMMM yyyy", { locale: es }).toUpperCase()}
+            <p className="text-slate-600 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mt-1 sm:mt-0.5">
+              Mensualidades · {format(new Date(), "MMMM yyyy", { locale: es }).toUpperCase()}
             </p>
           </div>
         </div>
 
-        {/* Stats rápidas - Ahora se ajustan en móvil */}
-        <div className="flex items-center justify-between w-full md:w-auto gap-2 sm:gap-4 bg-white/5 md:bg-transparent p-3 md:p-0 rounded-2xl">
-          <div className="text-center flex-1 md:flex-none">
-            <p className="text-rose-400 font-black text-lg sm:text-xl">{pendientes.length}</p>
-            <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-tighter">Pendientes</p>
+        {/* Stats rápidas - Se vuelven una fila compacta en móvil */}
+        <div className="flex items-center justify-between w-full md:w-auto gap-3 sm:gap-4 bg-white/[0.03] md:bg-transparent p-3 md:p-0 rounded-2xl border border-white/5 md:border-none">
+          <div className="text-center">
+            <p className="text-rose-400 font-black text-lg sm:text-xl leading-none">{pendientes.length}</p>
+            <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase mt-1">Pendientes</p>
           </div>
           <div className="w-px h-6 bg-white/10" />
-          <div className="text-center flex-1 md:flex-none">
-            <p className="text-emerald-400 font-black text-lg sm:text-xl">{alDia.length}</p>
-            <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-tighter">Al día</p>
+          <div className="text-center">
+            <p className="text-emerald-400 font-black text-lg sm:text-xl leading-none">{alDia.length}</p>
+            <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase mt-1">Al día</p>
           </div>
           <div className="w-px h-6 bg-white/10" />
+          <div className="text-center">
+            <p className="text-slate-400 font-black text-lg sm:text-xl leading-none">{alumnosConEstado.length}</p>
+            <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase mt-1">Total</p>
+          </div>
           <button
             onClick={fetchDatos}
-            className="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-primary/10 transition-all"
+            className="ml-auto md:ml-0 p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-primary/10 transition-all"
           >
             <span className={`material-symbols-outlined text-slate-400 text-sm ${loading ? 'animate-spin' : ''}`}>
               refresh
@@ -211,9 +215,9 @@ export default function AlertasPago({ currentUser }) {
         </div>
       </div>
 
-      {/* Filtros y Buscador - Stack en móvil */}
-      <div className="px-4 py-4 sm:px-8 border-b border-white/5 flex flex-col gap-4">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+      {/* Filtros y Buscador - El buscador ahora baja en móvil para dejar espacio a los nombres */}
+      <div className="px-4 py-4 sm:px-8 border-b border-white/5 flex flex-col sm:flex-row gap-4 items-center">
+        <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 scrollbar-hide">
           {[
             { id: 'PENDIENTE', label: 'Pendientes' },
             { id: 'AL_DIA',    label: 'Al día' },
@@ -232,29 +236,42 @@ export default function AlertasPago({ currentUser }) {
           ))}
         </div>
 
-        <div className="relative w-full">
+        <div className="relative w-full sm:ml-auto sm:w-48">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-sm">search</span>
           <input
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar alumno..."
-            className="bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5
-                       text-[10px] text-white outline-none focus:border-primary/30 w-full"
+            placeholder="Buscar..."
+            className="bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-[10px] text-white outline-none focus:border-primary/30 w-full placeholder:text-slate-700"
           />
         </div>
       </div>
 
       {/* Tabla */}
-      <div className="divide-y divide-white/[0.04]">
-        {filtrados.map(a => (
-          <FilaAlumno key={a.id} alumno={a} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="py-16 text-center text-primary animate-pulse text-[10px] font-black uppercase tracking-widest">
+          Verificando pagos...
+        </div>
+      ) : filtrados.length === 0 ? (
+        <div className="py-16 text-center space-y-2">
+          <span className="material-symbols-outlined text-4xl text-slate-700">
+            {filtro === 'PENDIENTE' ? 'check_circle' : 'payments'}
+          </span>
+          <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">
+            {filtro === 'PENDIENTE' ? '¡Todos al día!' : 'Sin resultados'}
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/[0.04]">
+          {filtrados.map(a => (
+            <FilaAlumno key={a.id} alumno={a} />
+          ))}
+        </div>
+      )}
     </div>
   );
-}
 
-// ─── Fila individual - REFORMATEADA PARA MÓVIL ───────────────────────────────
+// ─── Fila individual ─────────────────────────────────────────────────────────
 function FilaAlumno({ alumno }) {
   const pendiente  = alumno.pago?.estado === 'PENDIENTE';
   const fechaCorte = alumno.pago?.fechaCorte;
@@ -265,44 +282,57 @@ function FilaAlumno({ alumno }) {
     : 0;
 
   return (
-    <div className={`flex items-center gap-3 sm:gap-4 px-4 sm:px-8 py-4 hover:bg-white/[0.02] transition-all
+    <div className={`flex items-center gap-3 sm:gap-4 px-4 sm:px-8 py-4 sm:py-5 hover:bg-white/[0.02] transition-all
                      ${pendiente ? 'border-l-2 border-rose-500/40' : 'border-l-2 border-transparent'}`}>
 
-      {/* Avatar - Más pequeño en móvil */}
-      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800 flex flex-shrink-0 items-center justify-center font-black text-primary text-[10px] sm:text-sm border border-white/5 overflow-hidden">
+      {/* Avatar - Un poco más pequeño en móvil */}
+      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800 flex items-center justify-center
+                      font-black text-primary text-[10px] sm:text-sm border border-white/5 overflow-hidden flex-shrink-0">
         {alumno.foto_url
           ? <img src={alumno.foto_url} className="w-full h-full object-cover" alt="" />
           : `${alumno.primer_nombre?.[0] || ''}${alumno.primer_apellido?.[0] || ''}`}
       </div>
 
-      {/* Nombre e Info - Ajuste de truncate */}
-      <div className="flex-1 min-w-0 pr-2">
+      {/* Nombre e Info - min-w-0 es vital para que truncate no empuje lo demás */}
+      <div className="flex-1 min-w-0">
         <p className="font-black text-white text-[10px] sm:text-[11px] uppercase italic truncate leading-none">
           {alumno.primer_nombre} {alumno.primer_apellido}
         </p>
-        <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-1">
-          {alumno.categoria} <span className="hidden sm:inline">· Corte: día {fechaCorte ? getDate(fechaCorte) : '—'}</span>
+        <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-1 leading-none">
+          {alumno.categoria} <span className="hidden xs:inline">· Corte: {fechaCorte ? getDate(fechaCorte) : '—'}</span>
         </p>
       </div>
 
-      {/* Estado - Badges más compactos en móvil */}
+      {/* Último pago - Solo se muestra de Tablet en adelante */}
+      <div className="text-right hidden md:block flex-shrink-0">
+        <p className="text-[8px] text-slate-600 font-bold uppercase">Último pago</p>
+        <p className="text-[9px] text-slate-300 font-black">
+          {ultimoPago
+            ? format(new Date(ultimoPago.fecha_pago), "d MMM yyyy", { locale: es })
+            : 'Sin registros'}
+        </p>
+      </div>
+
+      {/* Estado - Badge compacto para móvil */}
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         {pendiente ? (
           <>
-            <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-md">
+            <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase tracking-widest
+                             text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full">
               <span className="material-symbols-outlined text-[10px] sm:text-xs">warning</span>
-              PENDIENTE
+              <span className="hidden xxs:inline">Pendiente</span>
             </span>
             {diasMora > 0 && (
-              <span className="text-[7px] font-bold text-rose-500/80 uppercase">
+              <span className="text-[7px] font-black text-rose-500/80 px-1 leading-none">
                 {diasMora}d mora
               </span>
             )}
           </>
         ) : (
-          <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-md">
+          <span className="flex items-center gap-1 text-[7px] sm:text-[9px] font-black uppercase tracking-widest
+                           text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full">
             <span className="material-symbols-outlined text-[10px] sm:text-xs">check_circle</span>
-            AL DÍA
+            <span className="hidden xxs:inline">Al día</span>
           </span>
         )}
       </div>
