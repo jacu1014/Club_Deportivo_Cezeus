@@ -20,7 +20,6 @@ const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage'));
 const AvancesPage        = lazy(() => import('./pages/AvancesPage'));
 
 // ─── Persistencia del perfil ──────────────────────────────────────────────────
-// IMPORTANTE: usar la misma key que supabaseClient.storageKey para evitar conflictos
 const PROFILE_KEY = 'cezeus_user_profile';
 const ROUTE_KEY   = 'cezeus_last_route';
 
@@ -61,12 +60,8 @@ function App() {
   const [legalText, setLegalText] = useState(null);
   const isUserLoaded = useRef(Boolean(loadProfile()));
 
-  // FIX: canAccess usa PaginasApp correctamente
-  // Si PaginasApp.EVALUACION no existe en types, canAccess devuelve false
-  // y redirige al login en lugar de cargar la página
   const canAccess = useCallback((page) => {
     if (!user) return false;
-    // Protección extra: si page es undefined (enum inexistente), denegar acceso
     if (!page) return false;
     return ROLE_PERMISSIONS[user.rol]?.includes(page) ?? false;
   }, [user]);
@@ -111,8 +106,6 @@ function App() {
       }
     };
 
-    // FIX: leer rol desde app_metadata primero (más confiable),
-    // luego user_metadata como fallback
     const getRoleFromSession = (session) =>
       session.user.app_metadata?.rol  ||
       session.user.user_metadata?.rol ||
@@ -132,7 +125,6 @@ function App() {
 
       const roleFromToken = getRoleFromSession(session);
 
-      // TOKEN_REFRESHED (~60s): NO re-fetchear perfil, solo sincronizar rol si cambió
       if (isUserLoaded.current && !forceRefresh) {
         if (isMounted) {
           setUser(prev => {
@@ -147,7 +139,6 @@ function App() {
         return;
       }
 
-      // SIGNED_IN o primer arranque: fetch completo del perfil
       const profile = await fetchUserProfile(session.user.id);
 
       if (isMounted) {
@@ -156,7 +147,7 @@ function App() {
           : {
               id:              session.user.id,
               primer_nombre:   session.user.user_metadata?.first_name || 'Usuario',
-              rol:             roleFromToken,
+              rol:              roleFromToken,
               acepta_terminos: false,
             };
 
@@ -265,6 +256,7 @@ function App() {
     };
   }, [fetchLegal]);
 
+  // Spinner inicial solo si NO tenemos nada en caché
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#05080d] flex flex-col items-center justify-center">
@@ -276,13 +268,24 @@ function App() {
     );
   }
 
-  const defaultPath  = user?.rol === 'ALUMNO' ? '/alumnos' : '/calendario';
+  const defaultPath   = user?.rol === 'ALUMNO' ? '/alumnos' : '/calendario';
   const lastRoute    = loadRoute();
   const redirectPath = lastRoute && user && !EXCLUDED_ROUTES.includes(lastRoute)
     ? lastRoute
     : defaultPath;
 
   const mostrarTerms = Boolean(user && !user.acepta_terminos && legalText);
+
+  // ─── FUNCIÓN DE RENDERIZADO SEGURO ──────────────────────────────────────────
+  const renderProtectedRoute = (page, Component, props = {}) => {
+    // Si todavía está validando con Supabase, NO redirigimos, mantenemos la pantalla actual.
+    if (loading) return null; 
+    
+    if (user && canAccess(page)) {
+      return <MainLayout user={user}><Component {...props} user={user} /></MainLayout>;
+    }
+    return <Navigate to={user ? defaultPath : '/login'} replace />;
+  };
 
   return (
     <>
@@ -294,52 +297,17 @@ function App() {
             <Route path="/login"          element={!user ? <Login /> : <Navigate to={redirectPath} replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            <Route path="/dashboard" element={
-              user && canAccess(PaginasApp.DASHBOARD)
-                ? <MainLayout user={user}><DashboardPage user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/notificaciones" element={
-              user && canAccess(PaginasApp.NOTIFICACIONES)
-                ? <MainLayout user={user}><NotificacionesPage user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/nosotros" element={
-              user && canAccess(PaginasApp.NOSOTROS)
-                ? <MainLayout user={user}><Nosotros /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/alumnos" element={
-              user && canAccess(PaginasApp.ALUMNOS)
-                ? <MainLayout user={user}><Alumnos /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/calendario" element={
-              user && canAccess(PaginasApp.CALENDARIO)
-                ? <MainLayout user={user}><CalendarioPage userRol={user.rol} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/configuracion" element={
-              user && canAccess(PaginasApp.CONFIGURACION)
-                ? <MainLayout user={user}><Configuracion user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            <Route path="/pagos" element={
-              user && canAccess(PaginasApp.PAGOS)
-                ? <MainLayout user={user}><PagosModule user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            {/* FIX: usar PaginasApp.AVANCES (no EVALUACION que no existe en types) */}
-            {/* Avances — el Sidebar apunta a /avances, la ruta coincide */}
-            <Route path="/avances" element={
-              user && canAccess(PaginasApp.AVANCES)
-                ? <MainLayout user={user}><AvancesPage user={user} /></MainLayout>
-                : <Navigate to={user ? defaultPath : '/login'} replace />
-            } />
-            {/* Alias /evaluacion por compatibilidad con links existentes */}
-            <Route path="/evaluacion" element={<Navigate to="/avances" replace />} />
+            <Route path="/dashboard"      element={renderProtectedRoute(PaginasApp.DASHBOARD, DashboardPage)} />
+            <Route path="/notificaciones" element={renderProtectedRoute(PaginasApp.NOTIFICACIONES, NotificacionesPage)} />
+            <Route path="/nosotros"       element={renderProtectedRoute(PaginasApp.NOSOTROS, Nosotros)} />
+            <Route path="/alumnos"        element={renderProtectedRoute(PaginasApp.ALUMNOS, Alumnos)} />
+            <Route path="/calendario"     element={renderProtectedRoute(PaginasApp.CALENDARIO, CalendarioPage, { userRol: user?.rol })} />
+            <Route path="/configuracion"  element={renderProtectedRoute(PaginasApp.CONFIGURACION, Configuracion)} />
+            <Route path="/pagos"          element={renderProtectedRoute(PaginasApp.PAGOS, PagosModule)} />
+            <Route path="/avances"        element={renderProtectedRoute(PaginasApp.AVANCES, AvancesPage)} />
 
-            <Route path="*" element={<Navigate to={user ? redirectPath : '/login'} replace />} />
+            <Route path="/evaluacion"     element={<Navigate to="/avances" replace />} />
+            <Route path="*"               element={<Navigate to={user ? redirectPath : '/login'} replace />} />
           </Routes>
         </Suspense>
       </Router>
