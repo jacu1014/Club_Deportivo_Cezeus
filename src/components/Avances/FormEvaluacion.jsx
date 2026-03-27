@@ -1,7 +1,7 @@
 // src/components/Avances/FormEvaluacion.jsx
 // VERSIÓN DINÁMICA - Con items personalizados por ciclo
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAvances } from '../../hooks/useAvances';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
@@ -85,19 +85,13 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
   // Cargar items del ciclo cuando se selecciona un ciclo
   useEffect(() => {
-    if (!ciclo?.id) {
-      console.log('No hay ciclo ID');
-      return;
-    }
+    if (!ciclo?.id) return;
     
-    console.log('Cargando items para ciclo:', ciclo.id);
     setLoadingItems(true);
     setErrorItems(null);
     
     getItemsConCategorias(ciclo.id)
       .then(items => {
-        console.log('Items recibidos:', items);
-        
         if (!items || items.length === 0) {
           setErrorItems('Este ciclo no tiene items configurados. Debes agregar items al crear el ciclo.');
           setItemsCiclo([]);
@@ -123,11 +117,8 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   useEffect(() => {
     if (!alumno?.id || !ciclo?.id || loadingItems || errorItems) return;
     
-    console.log('Buscando evaluación existente para alumno:', alumno.id, 'tipo:', tipo);
-    
     fetchEvaluacionesAlumno(alumno.id)
       .then(evals => {
-        console.log('Evaluaciones del alumno:', evals);
         const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
         setEvalExistente(existente || null);
         
@@ -177,9 +168,15 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     }
   }, [promedioActual, obtenerMensajePorPromedio, evalExistente, itemsCiclo.length]);
 
-  const handleSlider = (itemId, val) => {
-    setValores(prev => ({ ...prev, [itemId]: Number(val) }));
-  };
+  // Manejar cambio de slider - optimizado con useCallback
+  const handleSlider = useCallback((itemId, val) => {
+    const newValue = Number(val);
+    setValores(prev => {
+      // Solo actualizar si el valor cambió realmente
+      if (prev[itemId] === newValue) return prev;
+      return { ...prev, [itemId]: newValue };
+    });
+  }, []);
 
   const handleGuardar = async () => {
     if (!alumno) return;
@@ -440,33 +437,43 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
           {/* Sliders de la categoría activa */}
           <div className="space-y-5">
-            {itemsActuales.map(item => (
-              <div key={item.id} className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    {item.nombre}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-lg font-black italic
-                                      ${valores[item.id] >= 75 ? 'text-emerald-400'
-                                        : valores[item.id] >= 50 ? 'text-primary'
-                                        : 'text-amber-400'}`}>
-                      {valores[item.id] || 50}
-                    </span>
-                    <span className="text-[8px] text-slate-600 font-bold">/100</span>
+            {itemsActuales.map(item => {
+              const valorActual = valores[item.id] ?? 50;
+              return (
+                <div key={item.id} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {item.nombre}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-black italic
+                                        ${valorActual >= 75 ? 'text-emerald-400'
+                                          : valorActual >= 50 ? 'text-primary'
+                                          : 'text-amber-400'}`}>
+                        {valorActual}
+                      </span>
+                      <span className="text-[8px] text-slate-600 font-bold">/100</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    step="5"
+                    value={valorActual}
+                    onChange={(e) => handleSlider(item.id, e.target.value)}
+                    className="w-full accent-primary cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[8px] text-slate-700 font-bold uppercase">
+                    <span>0</span>
+                    <span>25</span>
+                    <span>50</span>
+                    <span>75</span>
+                    <span>100</span>
                   </div>
                 </div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={valores[item.id] || 50}
-                  onChange={e => handleSlider(item.id, e.target.value)}
-                  className="w-full accent-primary cursor-pointer"
-                />
-                <div className="flex justify-between text-[8px] text-slate-700 font-bold uppercase">
-                  <span>Bajo</span><span>Medio</span><span>Alto</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -477,14 +484,20 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
               Vista previa por categorías
             </p>
             <div style={{ height: '220px', minHeight: '220px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                  <PolarGrid stroke="#ffffff10" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar name="Evaluación" dataKey="A" stroke="#13ecec" fill="#13ecec" fillOpacity={0.35} />
-                </RadarChart>
-              </ResponsiveContainer>
+              {radarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                    <PolarGrid stroke="#ffffff10" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                    <Radar name="Evaluación" dataKey="A" stroke="#13ecec" fill="#13ecec" fillOpacity={0.35} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-500 text-[10px]">
+                  Sin datos para mostrar
+                </div>
+              )}
             </div>
           </div>
 
