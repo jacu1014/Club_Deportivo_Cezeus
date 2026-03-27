@@ -306,7 +306,7 @@ function FilaAlumno({ alumno }) {
           
           {/* Nueva línea: Último pago visible en móvil */}
           <p className="text-[7px] sm:text-[8px] md:hidden text-slate-500 font-medium uppercase leading-none">
-            Pago: {ultimoPago 
+            Ultimo Pago: {ultimoPago 
               ? format(new Date(ultimoPago.fecha_pago), "d MMM", { locale: es }) 
               : 'Sin registros'}
           </p>
