@@ -1,7 +1,7 @@
 // src/components/Avances/FormEvaluacion.jsx
-// VERSIÓN DINÁMICA - Con items personalizados por ciclo
+// VERSIÓN DINÁMICA - Optimizada para rendimiento
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAvances } from '../../hooks/useAvances';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
@@ -15,6 +15,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     mensajesPersonalizados 
   } = useAvances(currentUser);
 
+  // Estados
   const [alumnos, setAlumnos] = useState([]);
   const [loadingAlumnos, setLoadingA] = useState(true);
   const [alumno, setAlumno] = useState(alumnoInicial || null);
@@ -29,6 +30,10 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const [loadingItems, setLoadingItems] = useState(true);
   const [errorItems, setErrorItems] = useState(null);
   const [categoriaActiva, setCategoriaActiva] = useState(null);
+  
+  // Refs para evitar efectos innecesarios
+  const initialLoadDone = useRef(false);
+  const isFirstRender = useRef(true);
 
   // Agrupar items por categoría
   const itemsPorCategoria = useMemo(() => {
@@ -47,14 +52,14 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     return grouped;
   }, [itemsCiclo]);
 
-  const categoriasList = Object.keys(itemsPorCategoria);
+  const categoriasList = useMemo(() => Object.keys(itemsPorCategoria), [itemsPorCategoria]);
   
-  // Activar primera categoría por defecto
+  // Activar primera categoría por defecto (solo una vez)
   useEffect(() => {
-    if (categoriasList.length > 0 && !categoriaActiva) {
+    if (categoriasList.length > 0 && !categoriaActiva && !initialLoadDone.current) {
       setCategoriaActiva(categoriasList[0]);
     }
-  }, [categoriasList]);
+  }, [categoriasList, categoriaActiva]);
 
   // Cargar alumnos filtrados por categoría del ciclo
   useEffect(() => {
@@ -83,12 +88,13 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     fetchAlumnos();
   }, [ciclo.categoria]);
 
-  // Cargar items del ciclo cuando se selecciona un ciclo
+  // Cargar items del ciclo (solo una vez)
   useEffect(() => {
     if (!ciclo?.id) return;
     
     setLoadingItems(true);
     setErrorItems(null);
+    initialLoadDone.current = false;
     
     getItemsConCategorias(ciclo.id)
       .then(items => {
@@ -105,6 +111,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           initial[item.id] = 50;
         });
         setValores(initial);
+        initialLoadDone.current = true;
       })
       .catch(err => {
         console.error('Error al cargar items:', err);
@@ -113,28 +120,27 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       .finally(() => setLoadingItems(false));
   }, [ciclo?.id, getItemsConCategorias]);
 
-  // Buscar evaluación existente cuando cambia alumno o tipo
+  // Buscar evaluación existente - separado y con dependencias controladas
   useEffect(() => {
-    if (!alumno?.id || !ciclo?.id || loadingItems || errorItems) return;
+    // No ejecutar hasta que los items estén cargados
+    if (!alumno?.id || !ciclo?.id || loadingItems || errorItems || !initialLoadDone.current) return;
     
     fetchEvaluacionesAlumno(alumno.id)
       .then(evals => {
         const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
         setEvalExistente(existente || null);
         
-        if (existente) {
+        if (existente && existente.items && existente.items.length > 0) {
           // Cargar valores existentes
           const loaded = {};
-          if (existente.items && existente.items.length > 0) {
-            existente.items.forEach(item => {
-              loaded[item.ciclo_item_id] = item.calificacion;
-            });
-          }
+          existente.items.forEach(item => {
+            loaded[item.ciclo_item_id] = item.calificacion;
+          });
           setValores(loaded);
           setObservaciones(existente.observaciones || '');
           setMensajePersonalizado(existente.mensaje_personalizado || '');
-        } else {
-          // Resetear valores por defecto
+        } else if (!existente && initialLoadDone.current) {
+          // Resetear valores por defecto SOLO si no hay evaluación existente
           const reset = {};
           itemsCiclo.forEach(item => {
             reset[item.id] = 50;
@@ -142,7 +148,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           setValores(reset);
           setObservaciones('');
           
-          // Calcular mensaje automático basado en promedio inicial (50)
+          // Calcular mensaje automático
           const mensajeAuto = obtenerMensajePorPromedio(50);
           setMensajePersonalizado(mensajeAuto);
         }
@@ -150,9 +156,9 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       .catch(err => {
         console.error('Error al buscar evaluaciones:', err);
       });
-  }, [alumno?.id, tipo, ciclo?.id, itemsCiclo, loadingItems, errorItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio]);
+  }, [alumno?.id, tipo, ciclo?.id, loadingItems, errorItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio, itemsCiclo]);
 
-  // Calcular promedio actual en tiempo real
+  // Calcular promedio actual - optimizado
   const promedioActual = useMemo(() => {
     const calificaciones = Object.values(valores);
     if (calificaciones.length === 0) return 0;
@@ -160,22 +166,22 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     return Math.round(suma / calificaciones.length);
   }, [valores]);
 
-  // Actualizar mensaje automático cuando cambia el promedio
+  // Actualizar mensaje automático - solo cuando cambia el promedio y no hay evaluación existente
   useEffect(() => {
-    if (!evalExistente && itemsCiclo.length > 0) {
+    if (!evalExistente && itemsCiclo.length > 0 && initialLoadDone.current) {
       const mensajeAuto = obtenerMensajePorPromedio(promedioActual);
       setMensajePersonalizado(mensajeAuto);
     }
   }, [promedioActual, obtenerMensajePorPromedio, evalExistente, itemsCiclo.length]);
 
-  // Manejar cambio de slider
-  const handleSliderChange = (itemId, event) => {
+  // Manejar cambio de slider - optimizado con useCallback
+  const handleSliderChange = useCallback((itemId, event) => {
     const newValue = Number(event.target.value);
-    setValores(prev => ({
-      ...prev,
-      [itemId]: newValue
-    }));
-  };
+    setValores(prev => {
+      if (prev[itemId] === newValue) return prev;
+      return { ...prev, [itemId]: newValue };
+    });
+  }, []);
 
   const handleGuardar = async () => {
     if (!alumno) return;
@@ -186,7 +192,6 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     
     setSaving(true);
     try {
-      // Preparar items para guardar
       const itemsData = Object.entries(valores).map(([ciclo_item_id, calificacion]) => ({
         ciclo_item_id,
         calificacion
@@ -216,7 +221,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     }
   };
 
-  // Datos para el gráfico radar (agrupar por categoría)
+  // Datos para el gráfico radar
   const radarData = useMemo(() => {
     const data = [];
     Object.entries(itemsPorCategoria).forEach(([catNombre, catData]) => {
