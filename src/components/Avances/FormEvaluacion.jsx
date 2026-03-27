@@ -1,5 +1,5 @@
 // src/components/Avances/FormEvaluacion.jsx
-// VERSIÓN DINÁMICA - Optimizada para rendimiento
+// VERSIÓN OPTIMIZADA - Sin loops y con carga controlada
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
@@ -31,9 +31,18 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const [errorItems, setErrorItems] = useState(null);
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   
-  // Refs para evitar efectos innecesarios
-  const initialLoadDone = useRef(false);
-  const isFirstRender = useRef(true);
+  // Refs para controlar carga única
+  const dataLoaded = useRef(false);
+  const isMounted = useRef(true);
+  const currentAlumnoId = useRef(null);
+  const currentCicloId = useRef(null);
+
+  // Limpiar al desmontar
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Agrupar items por categoría
   const itemsPorCategoria = useMemo(() => {
@@ -54,14 +63,14 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
   const categoriasList = useMemo(() => Object.keys(itemsPorCategoria), [itemsPorCategoria]);
   
-  // Activar primera categoría por defecto (solo una vez)
+  // Activar primera categoría (solo una vez)
   useEffect(() => {
-    if (categoriasList.length > 0 && !categoriaActiva && !initialLoadDone.current) {
+    if (categoriasList.length > 0 && !categoriaActiva) {
       setCategoriaActiva(categoriasList[0]);
     }
   }, [categoriasList, categoriaActiva]);
 
-  // Cargar alumnos filtrados por categoría del ciclo
+  // Cargar alumnos (solo una vez)
   useEffect(() => {
     const fetchAlumnos = async () => {
       setLoadingA(true);
@@ -78,57 +87,74 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         }
         const { data, error } = await query;
         if (error) throw error;
-        setAlumnos(data || []);
+        if (isMounted.current) setAlumnos(data || []);
       } catch (err) {
         console.error('Error cargando alumnos:', err);
       } finally {
-        setLoadingA(false);
+        if (isMounted.current) setLoadingA(false);
       }
     };
     fetchAlumnos();
   }, [ciclo.categoria]);
 
-  // Cargar items del ciclo (solo una vez)
+  // Cargar items del ciclo (SOLO UNA VEZ)
   useEffect(() => {
-    if (!ciclo?.id) return;
+    if (!ciclo?.id || dataLoaded.current) return;
     
-    setLoadingItems(true);
-    setErrorItems(null);
-    initialLoadDone.current = false;
-    
-    getItemsConCategorias(ciclo.id)
-      .then(items => {
+    const loadItems = async () => {
+      setLoadingItems(true);
+      setErrorItems(null);
+      
+      try {
+        const items = await getItemsConCategorias(ciclo.id);
+        
+        if (!isMounted.current) return;
+        
         if (!items || items.length === 0) {
-          setErrorItems('Este ciclo no tiene items configurados. Debes agregar items al crear el ciclo.');
+          setErrorItems('Este ciclo no tiene items configurados.');
           setItemsCiclo([]);
           return;
         }
         
         setItemsCiclo(items);
-        // Inicializar valores por defecto (50 para cada item)
+        
+        // Inicializar valores
         const initial = {};
         items.forEach(item => {
           initial[item.id] = 50;
         });
         setValores(initial);
-        initialLoadDone.current = true;
-      })
-      .catch(err => {
+        dataLoaded.current = true;
+        currentCicloId.current = ciclo.id;
+      } catch (err) {
         console.error('Error al cargar items:', err);
-        setErrorItems('Error al cargar los items: ' + (err.message || 'Error de conexión'));
-      })
-      .finally(() => setLoadingItems(false));
+        if (isMounted.current) {
+          setErrorItems('Error al cargar los items: ' + (err.message || 'Error de conexión'));
+        }
+      } finally {
+        if (isMounted.current) setLoadingItems(false);
+      }
+    };
+    
+    loadItems();
   }, [ciclo?.id, getItemsConCategorias]);
 
-  // Buscar evaluación existente - separado y con dependencias controladas
+  // Cargar evaluación existente (SOLO cuando cambia alumno o tipo)
   useEffect(() => {
-    // No ejecutar hasta que los items estén cargados
-    if (!alumno?.id || !ciclo?.id || loadingItems || errorItems || !initialLoadDone.current) return;
+    if (!alumno?.id || !ciclo?.id || !dataLoaded.current || itemsCiclo.length === 0) return;
     
-    fetchEvaluacionesAlumno(alumno.id)
-      .then(evals => {
+    // Evitar carga si es el mismo alumno
+    if (currentAlumnoId.current === alumno.id && evalExistente !== null) return;
+    
+    const loadEvaluation = async () => {
+      try {
+        const evals = await fetchEvaluacionesAlumno(alumno.id);
+        
+        if (!isMounted.current) return;
+        
         const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
         setEvalExistente(existente || null);
+        currentAlumnoId.current = alumno.id;
         
         if (existente && existente.items && existente.items.length > 0) {
           // Cargar valores existentes
@@ -139,26 +165,25 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           setValores(loaded);
           setObservaciones(existente.observaciones || '');
           setMensajePersonalizado(existente.mensaje_personalizado || '');
-        } else if (!existente && initialLoadDone.current) {
-          // Resetear valores por defecto SOLO si no hay evaluación existente
+        } else {
+          // Resetear valores por defecto
           const reset = {};
           itemsCiclo.forEach(item => {
             reset[item.id] = 50;
           });
           setValores(reset);
           setObservaciones('');
-          
-          // Calcular mensaje automático
-          const mensajeAuto = obtenerMensajePorPromedio(50);
-          setMensajePersonalizado(mensajeAuto);
+          setMensajePersonalizado(obtenerMensajePorPromedio(50));
         }
-      })
-      .catch(err => {
+      } catch (err) {
         console.error('Error al buscar evaluaciones:', err);
-      });
-  }, [alumno?.id, tipo, ciclo?.id, loadingItems, errorItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio, itemsCiclo]);
+      }
+    };
+    
+    loadEvaluation();
+  }, [alumno?.id, tipo, ciclo?.id, itemsCiclo, fetchEvaluacionesAlumno, obtenerMensajePorPromedio]);
 
-  // Calcular promedio actual - optimizado
+  // Calcular promedio actual (memoizado)
   const promedioActual = useMemo(() => {
     const calificaciones = Object.values(valores);
     if (calificaciones.length === 0) return 0;
@@ -166,17 +191,16 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     return Math.round(suma / calificaciones.length);
   }, [valores]);
 
-  // Actualizar mensaje automático - solo cuando cambia el promedio y no hay evaluación existente
+  // Actualizar mensaje automático (solo cuando cambia el promedio y no hay evaluación)
   useEffect(() => {
-    if (!evalExistente && itemsCiclo.length > 0 && initialLoadDone.current) {
+    if (!evalExistente && itemsCiclo.length > 0 && dataLoaded.current) {
       const mensajeAuto = obtenerMensajePorPromedio(promedioActual);
       setMensajePersonalizado(mensajeAuto);
     }
   }, [promedioActual, obtenerMensajePorPromedio, evalExistente, itemsCiclo.length]);
 
-  // Manejar cambio de slider - optimizado con useCallback
-  const handleSliderChange = useCallback((itemId, event) => {
-    const newValue = Number(event.target.value);
+  // Handle slider - optimizado
+  const handleSliderChange = useCallback((itemId, newValue) => {
     setValores(prev => {
       if (prev[itemId] === newValue) return prev;
       return { ...prev, [itemId]: newValue };
@@ -184,11 +208,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   }, []);
 
   const handleGuardar = async () => {
-    if (!alumno) return;
-    if (itemsCiclo.length === 0) {
-      onGuardado('No hay items para evaluar en este ciclo.', 'error');
-      return;
-    }
+    if (!alumno || itemsCiclo.length === 0) return;
     
     setSaving(true);
     try {
@@ -213,6 +233,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       // Limpiar para evaluar otro alumno
       setAlumno(null);
       setEvalExistente(null);
+      currentAlumnoId.current = null;
     } catch (e) {
       console.error('Error guardando evaluación:', e);
       onGuardado('Error: ' + e.message, 'error');
@@ -221,7 +242,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     }
   };
 
-  // Datos para el gráfico radar
+  // Datos para radar
   const radarData = useMemo(() => {
     const data = [];
     Object.entries(itemsPorCategoria).forEach(([catNombre, catData]) => {
@@ -311,7 +332,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
-  // Estado de carga de items
+  // Estados de carga
   if (loadingItems) {
     return (
       <div className="py-20 text-center text-primary animate-pulse font-black uppercase text-[10px] tracking-[0.5em]">
@@ -320,7 +341,6 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
-  // Estado de error de items
   if (errorItems) {
     return (
       <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-8 text-center">
@@ -336,16 +356,12 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
-  // Si no hay items después de cargar
   if (itemsCiclo.length === 0) {
     return (
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-8 text-center">
         <span className="material-symbols-outlined text-4xl text-amber-400 mb-2">info</span>
         <p className="text-amber-400 text-[10px] font-black uppercase">
           Este ciclo no tiene items configurados.
-        </p>
-        <p className="text-slate-400 text-[8px] mt-2">
-          Debes editar el ciclo y agregar items para poder evaluar.
         </p>
         <button 
           onClick={onVolver}
@@ -357,7 +373,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
-  // ── Paso 2 y 3: Formulario de evaluación dinámico ────────────────────────────
+  // ── Formulario de evaluación ────────────────────────────────────────────────
   const categoriaActual = itemsPorCategoria[categoriaActiva];
   const itemsActuales = categoriaActual?.items || [];
 
@@ -366,7 +382,10 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
 
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap">
-        <button onClick={() => setAlumno(null)}
+        <button onClick={() => {
+          setAlumno(null);
+          currentAlumnoId.current = null;
+        }}
                 className="flex items-center gap-2 text-[10px] font-black text-slate-500
                            hover:text-primary transition-all uppercase tracking-widest">
           <span className="material-symbols-outlined text-sm">arrow_back</span>
@@ -417,13 +436,12 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         ))}
       </div>
 
-      {/* Contenido: sliders + radar */}
+      {/* Contenido */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Sliders dinámicos por categoría */}
+        {/* Sliders */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 space-y-5">
 
-          {/* Tabs de categorías */}
           {categoriasList.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {categoriasList.map(cat => (
@@ -439,10 +457,9 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
             </div>
           )}
 
-          {/* Sliders de la categoría activa */}
           <div className="space-y-5">
             {itemsActuales.map(item => {
-              const valorActual = valores[item.id] !== undefined ? valores[item.id] : 50;
+              const valorActual = valores[item.id] ?? 50;
               return (
                 <div key={item.id} className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -465,45 +482,20 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
                     max="100" 
                     step="5"
                     value={valorActual}
-                    onChange={(e) => handleSliderChange(item.id, e)}
+                    onChange={(e) => handleSliderChange(item.id, Number(e.target.value))}
                     className="w-full accent-primary cursor-pointer"
                   />
                   <div className="flex justify-between text-[8px] text-slate-700 font-bold uppercase">
-                    <button 
-                      type="button"
-                      onClick={() => handleSliderChange(item.id, { target: { value: 0 } })}
-                      className="hover:text-primary transition-colors"
-                    >
-                      0
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => handleSliderChange(item.id, { target: { value: 25 } })}
-                      className="hover:text-primary transition-colors"
-                    >
-                      25
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => handleSliderChange(item.id, { target: { value: 50 } })}
-                      className="hover:text-primary transition-colors"
-                    >
-                      50
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => handleSliderChange(item.id, { target: { value: 75 } })}
-                      className="hover:text-primary transition-colors"
-                    >
-                      75
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => handleSliderChange(item.id, { target: { value: 100 } })}
-                      className="hover:text-primary transition-colors"
-                    >
-                      100
-                    </button>
+                    {[0, 25, 50, 75, 100].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => handleSliderChange(item.id, val)}
+                        className="hover:text-primary transition-colors"
+                      >
+                        {val}
+                      </button>
+                    ))}
                   </div>
                 </div>
               );
@@ -511,7 +503,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           </div>
         </div>
 
-        {/* Radar preview y mensaje personalizado */}
+        {/* Radar y mensajes */}
         <div className="space-y-6">
           <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 italic">
@@ -535,7 +527,6 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
             </div>
           </div>
 
-          {/* Observaciones */}
           <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 space-y-3">
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
               Observaciones generales
@@ -549,7 +540,6 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
                          text-white outline-none focus:border-primary transition-colors resize-none"
             />
             
-            {/* Mensaje personalizado */}
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-2 block">
               Mensaje para el alumno (personalizable)
             </label>
