@@ -73,7 +73,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     e.preventDefault();
     
     if (paso === 1) {
-      // Validar paso 1
+      // Validar paso 1 (solo datos básicos, NO items)
       if (!form.nombre.trim()) return setError('El nombre es obligatorio.');
       if (!form.fecha_fin) return setError('La fecha de fin es obligatoria.');
       if (form.fecha_fin < form.fecha_inicio) {
@@ -83,12 +83,8 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
         return setError('Debes seleccionar al menos una categoría.');
       }
       
-      // Verificar que cada categoría tenga al menos un item
-      const categoriasSinItems = categoriasSeleccionadas.filter(cat => cat.items.length === 0);
-      if (categoriasSinItems.length > 0) {
-        setError(`Las siguientes categorías deben tener al menos un item: ${categoriasSinItems.map(c => c.nombre).join(', ')}`);
-        return;
-      }
+      // ✅ ELIMINADA la validación de items aquí
+      // Los items se agregarán en el Paso 2
       
       setError('');
       setPaso(2);
@@ -98,10 +94,16 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     // Paso 2: Guardar ciclo con items
     setSaving(true);
     try {
+      // ✅ Validar que todas las categorías tengan al menos un item ANTES de guardar
+      const categoriasSinItems = categoriasSeleccionadas.filter(cat => cat.items.length === 0);
+      if (categoriasSinItems.length > 0) {
+        throw new Error(`Las siguientes categorías deben tener al menos un item: ${categoriasSinItems.map(c => c.nombre).join(', ')}`);
+      }
+      
       // Preparar items para guardar
       const itemsToSave = [];
       categoriasSeleccionadas.forEach(cat => {
-        cat.items.forEach((item, idx) => {
+        cat.items.forEach((item) => {
           itemsToSave.push({
             categoria_id: cat.id,
             nombre: item.nombre,
@@ -114,6 +116,8 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
         ...form,
         items: itemsToSave
       });
+      
+      // Si todo sale bien, el modal se cerrará desde onGuardar
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -250,18 +254,22 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
                   
                   {/* Lista de items existentes */}
                   <div className="space-y-2">
-                    {categoria.items.map((item, idx) => (
-                      <div key={item.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
-                        <span className="text-[10px] text-white flex-1">{item.nombre}</span>
-                        <button
-                          type="button"
-                          onClick={() => eliminarItem(categoria.id, idx)}
-                          className="text-rose-400 hover:text-rose-300 text-[10px]"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    ))}
+                    {categoria.items.length === 0 ? (
+                      <p className="text-[9px] text-slate-500 italic">No hay items agregados aún</p>
+                    ) : (
+                      categoria.items.map((item, idx) => (
+                        <div key={item.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                          <span className="text-[10px] text-white flex-1">{item.nombre}</span>
+                          <button
+                            type="button"
+                            onClick={() => eliminarItem(categoria.id, idx)}
+                            className="text-rose-400 hover:text-rose-300 text-[10px]"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
                   
                   {/* Agregar nuevo item */}
@@ -283,8 +291,10 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
                       type="button"
                       onClick={(e) => {
                         const input = e.target.previousSibling;
-                        agregarItem(categoria.id, input.value);
-                        input.value = '';
+                        if (input.value.trim()) {
+                          agregarItem(categoria.id, input.value);
+                          input.value = '';
+                        }
                       }}
                       className="bg-primary/20 text-primary px-3 rounded-lg text-[10px] font-black uppercase
                                  hover:bg-primary/30 transition-colors"
