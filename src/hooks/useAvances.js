@@ -1,87 +1,96 @@
-// src/hooks/useAvances.js
-// Hook central del módulo Avances de Procesos.
-// Centraliza todas las consultas a Supabase para ciclos, evaluaciones y observaciones.
+// src/hooks/useAvances.js (versión modificada)
+// Hook central del módulo Avances de Procesos - VERSIÓN DINÁMICA
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { registrarLog } from '../lib/activity';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ============================================
+// NUEVAS FUNCIONES PARA ESTRUCTURA DINÁMICA
+// ============================================
 
-/** Calcula el promedio de un grupo de campos numéricos de una evaluación */
-export const calcularPromedioDimension = (eval_, campos) => {
-  if (!eval_) return 0;
-  const vals = campos.map(c => eval_[c] ?? 50);
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+/** Obtiene los items de un ciclo con sus categorías */
+export const getItemsConCategorias = async (cicloId) => {
+  const { data, error } = await supabase
+    .from('ciclos_items')
+    .select(`
+      *,
+      categoria:categorias_base(*)
+    `)
+    .eq('ciclo_id', cicloId)
+    .order('orden');
+  
+  if (error) throw error;
+  return data || [];
 };
 
-/** Convierte una evaluación a los 6 puntos del RadarChart de SeguimientoAlumno */
-export const evaluacionARadar = (eval_) => {
-  if (!eval_) return null;
-  return [
-    { subject: 'Técnica',     A: calcularPromedioDimension(eval_, ['tec_control','tec_pase','tec_regate','tec_disparo']) },
-    { subject: 'Física',      A: calcularPromedioDimension(eval_, ['fis_velocidad','fis_resistencia','fis_fuerza','fis_coordinacion']) },
-    { subject: 'Táctica',     A: calcularPromedioDimension(eval_, ['tac_posicion','tac_equipo','tac_lectura']) },
-    { subject: 'Actitud',     A: calcularPromedioDimension(eval_, ['act_disciplina','act_respeto','act_puntualidad']) },
-    { subject: 'Pase',        A: eval_.tec_pase        ?? 50 },
-    { subject: 'Velocidad',   A: eval_.fis_velocidad   ?? 50 },
-  ];
+/** Calcula el promedio de calificaciones de una evaluación */
+export const calcularPromedioEvaluacion = (itemsCalificaciones) => {
+  if (!itemsCalificaciones || itemsCalificaciones.length === 0) return 0;
+  const suma = itemsCalificaciones.reduce((acc, item) => acc + item.calificacion, 0);
+  return Math.round(suma / itemsCalificaciones.length);
 };
 
-/** Estructura de dimensiones con sus campos para el formulario de evaluación */
-export const DIMENSIONES = [
-  {
-    key: 'tecnica', label: 'Técnica', icon: 'sports_soccer', color: 'text-primary',
-    campos: [
-      { key: 'tec_control',  label: 'Control de balón' },
-      { key: 'tec_pase',     label: 'Precisión de pase' },
-      { key: 'tec_regate',   label: 'Regate' },
-      { key: 'tec_disparo',  label: 'Disparo a puerta' },
-    ],
-  },
-  {
-    key: 'fisica', label: 'Física', icon: 'fitness_center', color: 'text-emerald-400',
-    campos: [
-      { key: 'fis_velocidad',    label: 'Velocidad' },
-      { key: 'fis_resistencia',  label: 'Resistencia' },
-      { key: 'fis_fuerza',       label: 'Fuerza' },
-      { key: 'fis_coordinacion', label: 'Coordinación' },
-    ],
-  },
-  {
-    key: 'tactica', label: 'Táctica', icon: 'psychology', color: 'text-purple-400',
-    campos: [
-      { key: 'tac_posicion', label: 'Posicionamiento' },
-      { key: 'tac_equipo',   label: 'Juego en equipo' },
-      { key: 'tac_lectura',  label: 'Lectura del juego' },
-    ],
-  },
-  {
-    key: 'actitud', label: 'Actitudinal', icon: 'emoji_events', color: 'text-amber-400',
-    campos: [
-      { key: 'act_disciplina',  label: 'Disciplina' },
-      { key: 'act_respeto',     label: 'Respeto' },
-      { key: 'act_puntualidad', label: 'Puntualidad' },
-    ],
-  },
-];
-
-/** Valores por defecto de una evaluación en blanco */
-export const EVAL_INICIAL = DIMENSIONES.flatMap(d => d.campos).reduce((acc, c) => {
-  acc[c.key] = 50;
-  return acc;
-}, {});
+/** Agrupa calificaciones por categoría para gráficos */
+export const agruparPorCategoria = (itemsConCalificaciones, categorias) => {
+  const resultado = {};
+  itemsConCalificaciones.forEach(item => {
+    const catNombre = item.item?.categoria?.nombre || 'Sin categoría';
+    if (!resultado[catNombre]) {
+      resultado[catNombre] = {
+        categoria: catNombre,
+        items: [],
+        promedio: 0
+      };
+    }
+    resultado[catNombre].items.push({
+      nombre: item.item.nombre,
+      calificacion: item.calificacion
+    });
+  });
+  
+  // Calcular promedios por categoría
+  Object.keys(resultado).forEach(cat => {
+    const items = resultado[cat].items;
+    const suma = items.reduce((acc, i) => acc + i.calificacion, 0);
+    resultado[cat].promedio = Math.round(suma / items.length);
+  });
+  
+  return resultado;
+};
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
 
 export function useAvances(currentUser) {
   const [ciclos, setCiclos]           = useState([]);
   const [loadingCiclos, setLoadingC]  = useState(true);
+  const [categoriasBase, setCategoriasBase] = useState([]);
+  const [mensajesPersonalizados, setMensajesPersonalizados] = useState([]);
 
   const canEvaluar = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR', 'ENTRENADOR']
     .includes(currentUser?.rol);
 
-  // ── Ciclos ──────────────────────────────────────────────────────────────────
+  // ── Cargar datos maestros ──────────────────────────────────────────────────
+  const cargarDatosMaestros = useCallback(async () => {
+    // Cargar categorías base
+    const { data: cats } = await supabase
+      .from('categorias_base')
+      .select('*')
+      .order('orden');
+    if (cats) setCategoriasBase(cats);
+    
+    // Cargar mensajes personalizados
+    const { data: msgs } = await supabase
+      .from('mensajes_personalizados_club')
+      .select('*')
+      .eq('activo', true)
+      .order('rango_min');
+    if (msgs) setMensajesPersonalizados(msgs);
+  }, []);
+
+  useEffect(() => { cargarDatosMaestros(); }, [cargarDatosMaestros]);
+
+  // ── Ciclos (MODIFICADO: ahora trabaja con la tabla sin categoría) ─────────
   const fetchCiclos = useCallback(async () => {
     setLoadingC(true);
     const { data, error } = await supabase
@@ -95,19 +104,39 @@ export function useAvances(currentUser) {
   useEffect(() => { fetchCiclos(); }, [fetchCiclos]);
 
   const crearCiclo = async (payload) => {
-    const { data, error } = await supabase
+    // payload ahora incluye nombre, descripcion, fecha_inicio, fecha_fin, items (array de items por categoría)
+    const { items, ...cicloData } = payload;
+    
+    // 1. Crear el ciclo
+    const { data: ciclo, error: cicloError } = await supabase
       .from('ciclos_evaluacion')
-      .insert([{ ...payload, creado_por: currentUser?.id }])
+      .insert([{ ...cicloData, creado_por: currentUser?.id, activo: true }])
       .select()
       .single();
-    if (error) throw error;
+    if (cicloError) throw cicloError;
+    
+    // 2. Crear los items del ciclo
+    if (items && items.length > 0) {
+      const itemsToInsert = items.map((item, idx) => ({
+        ciclo_id: ciclo.id,
+        categoria_id: item.categoria_id,
+        nombre: item.nombre,
+        orden: idx
+      }));
+      
+      const { error: itemsError } = await supabase
+        .from('ciclos_items')
+        .insert(itemsToInsert);
+      if (itemsError) throw itemsError;
+    }
+    
     await registrarLog({
       accion: 'CREAR_CICLO',
       descripcion: `Ciclo creado: ${payload.nombre}`,
       modulo: 'AVANCES',
     });
     await fetchCiclos();
-    return data;
+    return ciclo;
   };
 
   const toggleCiclo = async (id, activo) => {
@@ -120,6 +149,7 @@ export function useAvances(currentUser) {
   };
 
   const eliminarCiclo = async (id, nombre) => {
+    // Las tablas relacionadas tienen ON DELETE CASCADE
     const { error } = await supabase.from('ciclos_evaluacion').delete().eq('id', id);
     if (error) throw error;
     await registrarLog({
@@ -130,47 +160,104 @@ export function useAvances(currentUser) {
     setCiclos(prev => prev.filter(c => c.id !== id));
   };
 
-  // ── Evaluaciones ────────────────────────────────────────────────────────────
+  // ── Evaluaciones (NUEVA ESTRUCTURA) ─────────────────────────────────────────
   const fetchEvaluacionesAlumno = useCallback(async (alumnoId) => {
+    // Obtener evaluaciones con sus items y los items del ciclo
     const { data, error } = await supabase
-      .from('evaluaciones')
-      .select(`*, ciclos_evaluacion(nombre, fecha_inicio, fecha_fin, categoria)`)
+      .from('evaluaciones_avance')
+      .select(`
+        *,
+        items:evaluaciones_items(
+          *,
+          item:ciclos_items(
+            *,
+            categoria:categorias_base(*)
+          )
+        ),
+        ciclo:ciclos_evaluacion(*)
+      `)
       .eq('alumno_id', alumnoId)
       .order('created_at', { ascending: false });
+    
     if (error) throw error;
     return data || [];
   }, []);
 
   const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
+    // Obtener todas las evaluaciones de un ciclo con alumnos y sus items
     const { data, error } = await supabase
-      .from('evaluaciones')
-      .select(`*, usuarios!alumno_id(id, primer_nombre, primer_apellido, categoria, foto_url)`)
+      .from('evaluaciones_avance')
+      .select(`
+        *,
+        items:evaluaciones_items(
+          *,
+          item:ciclos_items(*)
+        ),
+        alumno:usuarios(id, primer_nombre, primer_apellido, categoria, foto_url)
+      `)
       .eq('ciclo_id', cicloId);
+    
     if (error) throw error;
     return data || [];
   }, []);
 
   const guardarEvaluacion = async (payload) => {
-    // Upsert: si ya existe (alumno+ciclo+tipo) la sobreescribe
-    const { data, error } = await supabase
-      .from('evaluaciones')
+    // payload = { evaluacion: {...}, items: [{ ciclo_item_id, calificacion }] }
+    const { evaluacionData, itemsData } = payload;
+    
+    // 1. Guardar la evaluación (upsert por alumno+ciclo+tipo)
+    const { data: evaluacion, error: evalError } = await supabase
+      .from('evaluaciones_avance')
       .upsert(
-        [{ ...payload, entrenador_id: currentUser?.id }],
+        [{ 
+          ...evaluacionData, 
+          entrenador_id: currentUser?.id,
+          fecha_evaluacion: new Date().toISOString().split('T')[0]
+        }],
         { onConflict: 'alumno_id,ciclo_id,tipo' }
       )
       .select()
       .single();
-    if (error) throw error;
+    if (evalError) throw evalError;
+    
+    // 2. Eliminar items existentes (para sobrescribir)
+    await supabase
+      .from('evaluaciones_items')
+      .delete()
+      .eq('evaluacion_id', evaluacion.id);
+    
+    // 3. Insertar nuevos items
+    if (itemsData && itemsData.length > 0) {
+      const itemsToInsert = itemsData.map(item => ({
+        evaluacion_id: evaluacion.id,
+        ciclo_item_id: item.ciclo_item_id,
+        calificacion: item.calificacion
+      }));
+      
+      const { error: itemsError } = await supabase
+        .from('evaluaciones_items')
+        .insert(itemsToInsert);
+      if (itemsError) throw itemsError;
+    }
+    
     await registrarLog({
       accion: 'GUARDAR_EVALUACION',
-      descripcion: `Evaluación ${payload.tipo} guardada para alumno ${payload.alumno_id}`,
+      descripcion: `Evaluación ${evaluacionData.tipo} guardada para alumno ${evaluacionData.alumno_id}`,
       modulo: 'AVANCES',
-      detalles: { ciclo_id: payload.ciclo_id, tipo: payload.tipo },
+      detalles: { ciclo_id: evaluacionData.ciclo_id, tipo: evaluacionData.tipo },
     });
-    return data;
+    
+    return evaluacion;
   };
 
-  // ── Observaciones ───────────────────────────────────────────────────────────
+  const obtenerMensajePorPromedio = (promedio) => {
+    const mensaje = mensajesPersonalizados.find(
+      m => promedio >= m.rango_min && promedio <= m.rango_max
+    );
+    return mensaje?.mensaje || 'Evaluación completada.';
+  };
+
+  // ── Observaciones (sin cambios) ────────────────────────────────────────────
   const fetchObservaciones = useCallback(async (alumnoId) => {
     const { data, error } = await supabase
       .from('observaciones_seguimiento')
@@ -220,11 +307,20 @@ export function useAvances(currentUser) {
   };
 
   return {
+    // datos maestros
+    categoriasBase,
+    mensajesPersonalizados,
     // ciclos
     ciclos, loadingCiclos, fetchCiclos,
     crearCiclo, toggleCiclo, eliminarCiclo,
+    // items del ciclo
+    getItemsConCategorias: (cicloId) => getItemsConCategorias(cicloId),
     // evaluaciones
     fetchEvaluacionesAlumno, fetchEvaluacionesCiclo, guardarEvaluacion,
+    obtenerMensajePorPromedio,
+    // utilidades
+    calcularPromedioEvaluacion,
+    agruparPorCategoria,
     // observaciones
     fetchObservaciones, agregarObservacion, editarObservacion, eliminarObservacion,
     // permisos

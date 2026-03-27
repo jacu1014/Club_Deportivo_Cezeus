@@ -1,32 +1,61 @@
 // src/components/Avances/FormEvaluacion.jsx
-// Formulario de evaluación de un alumno en un ciclo.
-// Paso 1: seleccionar alumno (si no viene precargado)
-// Paso 2: seleccionar tipo INICIO | FINAL
-// Paso 3: ajustar sliders por habilidad
-// Paso 4: guardar
+// VERSIÓN DINÁMICA - Con items personalizados por ciclo
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { useAvances, DIMENSIONES, EVAL_INICIAL, evaluacionARadar } from '../../hooks/useAvances';
+import { useAvances } from '../../hooks/useAvances';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
-const ROLES_EVAL = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR', 'ENTRENADOR'];
-
 export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVolver, onGuardado }) {
-  const { guardarEvaluacion, fetchEvaluacionesAlumno } = useAvances(currentUser);
+  const { 
+    guardarEvaluacion, 
+    fetchEvaluacionesAlumno, 
+    getItemsConCategorias,
+    obtenerMensajePorPromedio,
+    mensajesPersonalizados 
+  } = useAvances(currentUser);
 
-  const [alumnos, setAlumnos]             = useState([]);
-  const [loadingAlumnos, setLoadingA]     = useState(true);
-  const [alumno, setAlumno]               = useState(alumnoInicial || null);
-  const [busqueda, setBusqueda]           = useState('');
-  const [tipo, setTipo]                   = useState('INICIO');
-  const [valores, setValores]             = useState({ ...EVAL_INICIAL });
+  const [alumnos, setAlumnos] = useState([]);
+  const [loadingAlumnos, setLoadingA] = useState(true);
+  const [alumno, setAlumno] = useState(alumnoInicial || null);
+  const [busqueda, setBusqueda] = useState('');
+  const [tipo, setTipo] = useState('INICIAL'); // Cambiado de 'INICIO' a 'INICIAL'
+  const [itemsCiclo, setItemsCiclo] = useState([]);
+  const [valores, setValores] = useState({});
   const [observaciones, setObservaciones] = useState('');
-  const [saving, setSaving]               = useState(false);
+  const [mensajePersonalizado, setMensajePersonalizado] = useState('');
+  const [saving, setSaving] = useState(false);
   const [evalExistente, setEvalExistente] = useState(null);
-  const [activaDim, setActivaDim]         = useState('tecnica');
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [categoriaActiva, setCategoriaActiva] = useState(null);
 
-  // Cargar alumnos filtrados por categoría del ciclo
+  // Agrupar items por categoría
+  const itemsPorCategoria = useMemo(() => {
+    const grouped = {};
+    itemsCiclo.forEach(item => {
+      const catNombre = item.categoria?.nombre || 'Sin categoría';
+      if (!grouped[catNombre]) {
+        grouped[catNombre] = {
+          categoria_id: item.categoria_id,
+          nombre: catNombre,
+          items: []
+        };
+      }
+      grouped[catNombre].items.push(item);
+    });
+    return grouped;
+  }, [itemsCiclo]);
+
+  const categoriasList = Object.keys(itemsPorCategoria);
+  
+  // Activar primera categoría por defecto
+  useEffect(() => {
+    if (categoriasList.length > 0 && !categoriaActiva) {
+      setCategoriaActiva(categoriasList[0]);
+    }
+  }, [categoriasList]);
+
+  // Cargar alumnos filtrados por categoría del ciclo (si el ciclo tiene categoría)
   useEffect(() => {
     const fetchAlumnos = async () => {
       setLoadingA(true);
@@ -34,10 +63,11 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         .from('usuarios')
         .select('id, primer_nombre, primer_apellido, categoria, foto_url, numero_documento')
         .eq('rol', 'ALUMNO')
-        .ilike('estado', 'activo')  // FIX: case-insensitive — BD guarda 'Activo'
+        .ilike('estado', 'activo')
         .order('primer_apellido');
 
-      if (ciclo.categoria !== 'TODAS') {
+      // Si el ciclo tiene campo categoria, filtrar (por compatibilidad)
+      if (ciclo.categoria && ciclo.categoria !== 'TODAS') {
         query = query.ilike('categoria', `%${ciclo.categoria}%`);
       }
       const { data } = await query;
@@ -47,54 +77,105 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     fetchAlumnos();
   }, [ciclo.categoria]);
 
-  // Cuando se selecciona alumno, buscar evaluación existente
+  // Cargar items del ciclo cuando se selecciona un ciclo
   useEffect(() => {
-    if (!alumno?.id) return;
+    if (!ciclo?.id) return;
+    setLoadingItems(true);
+    getItemsConCategorias(ciclo.id)
+      .then(items => {
+        setItemsCiclo(items);
+        // Inicializar valores por defecto (50 para cada item)
+        const initial = {};
+        items.forEach(item => {
+          initial[item.id] = 50;
+        });
+        setValores(initial);
+      })
+      .catch(console.error)
+      .finally(() => setLoadingItems(false));
+  }, [ciclo?.id, getItemsConCategorias]);
+
+  // Buscar evaluación existente cuando cambia alumno o tipo
+  useEffect(() => {
+    if (!alumno?.id || !ciclo?.id || loadingItems) return;
+    
     fetchEvaluacionesAlumno(alumno.id).then(evals => {
       const existente = evals.find(e => e.ciclo_id === ciclo.id && e.tipo === tipo);
       setEvalExistente(existente || null);
+      
       if (existente) {
-        // Pre-cargar valores existentes para edición
+        // Cargar valores existentes
         const loaded = {};
-        DIMENSIONES.flatMap(d => d.campos).forEach(c => {
-          loaded[c.key] = existente[c.key] ?? 50;
-        });
+        if (existente.items && existente.items.length > 0) {
+          existente.items.forEach(item => {
+            loaded[item.ciclo_item_id] = item.calificacion;
+          });
+        }
         setValores(loaded);
         setObservaciones(existente.observaciones || '');
+        setMensajePersonalizado(existente.mensaje_personalizado || '');
       } else {
-        setValores({ ...EVAL_INICIAL });
+        // Resetear valores por defecto
+        const reset = {};
+        itemsCiclo.forEach(item => {
+          reset[item.id] = 50;
+        });
+        setValores(reset);
         setObservaciones('');
+        
+        // Calcular mensaje automático basado en promedio inicial (50)
+        const promedioInicial = 50;
+        const mensajeAuto = obtenerMensajePorPromedio(promedioInicial);
+        setMensajePersonalizado(mensajeAuto);
       }
     }).catch(console.error);
-  }, [alumno?.id, tipo, ciclo.id, fetchEvaluacionesAlumno]);
+  }, [alumno?.id, tipo, ciclo?.id, itemsCiclo, loadingItems, fetchEvaluacionesAlumno, obtenerMensajePorPromedio]);
 
-  const alumnosFiltrados = useMemo(() =>
-    alumnos.filter(a => {
-      const q = busqueda.toLowerCase();
-      return `${a.primer_nombre} ${a.primer_apellido}`.toLowerCase().includes(q) ||
-             (a.numero_documento || '').includes(q);
-    }), [alumnos, busqueda]);
+  // Calcular promedio actual en tiempo real
+  const promedioActual = useMemo(() => {
+    const calificaciones = Object.values(valores);
+    if (calificaciones.length === 0) return 0;
+    const suma = calificaciones.reduce((a, b) => a + b, 0);
+    return Math.round(suma / calificaciones.length);
+  }, [valores]);
 
-  const radarData = useMemo(() => evaluacionARadar(valores) || [], [valores]);
+  // Actualizar mensaje automático cuando cambia el promedio
+  useEffect(() => {
+    if (!evalExistente) {
+      const mensajeAuto = obtenerMensajePorPromedio(promedioActual);
+      setMensajePersonalizado(mensajeAuto);
+    }
+  }, [promedioActual, obtenerMensajePorPromedio, evalExistente]);
 
-  const handleSlider = (key, val) => setValores(prev => ({ ...prev, [key]: Number(val) }));
+  const handleSlider = (itemId, val) => {
+    setValores(prev => ({ ...prev, [itemId]: Number(val) }));
+  };
 
   const handleGuardar = async () => {
     if (!alumno) return;
     setSaving(true);
     try {
+      // Preparar items para guardar
+      const itemsData = Object.entries(valores).map(([ciclo_item_id, calificacion]) => ({
+        ciclo_item_id,
+        calificacion
+      }));
+
       await guardarEvaluacion({
-        alumno_id:    alumno.id,
-        ciclo_id:     ciclo.id,
-        tipo,
-        ...valores,
-        observaciones,
+        evaluacionData: {
+          alumno_id: alumno.id,
+          ciclo_id: ciclo.id,
+          tipo,
+          observaciones,
+          mensaje_personalizado: mensajePersonalizado,
+        },
+        itemsData
       });
-      onGuardado(`Evaluación ${tipo} guardada para ${alumno.primer_nombre} ${alumno.primer_apellido}.`);
+      
+      onGuardado(`Evaluación ${tipo === 'INICIAL' ? 'Inicial' : 'Final'} guardada para ${alumno.primer_nombre} ${alumno.primer_apellido}.`);
+      
       // Limpiar para evaluar otro alumno
       setAlumno(null);
-      setValores({ ...EVAL_INICIAL });
-      setObservaciones('');
       setEvalExistente(null);
     } catch (e) {
       onGuardado('Error: ' + e.message, 'error');
@@ -102,6 +183,21 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       setSaving(false);
     }
   };
+
+  // Datos para el gráfico radar (agrupar por categoría)
+  const radarData = useMemo(() => {
+    const data = [];
+    Object.entries(itemsPorCategoria).forEach(([catNombre, catData]) => {
+      const itemsEnCat = catData.items;
+      const suma = itemsEnCat.reduce((acc, item) => acc + (valores[item.id] || 0), 0);
+      const promedio = itemsEnCat.length > 0 ? Math.round(suma / itemsEnCat.length) : 0;
+      data.push({
+        subject: catNombre,
+        A: promedio,
+      });
+    });
+    return data;
+  }, [itemsPorCategoria, valores]);
 
   // ── Paso 1: Seleccionar alumno ───────────────────────────────────────────────
   if (!alumno) {
@@ -142,7 +238,11 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {alumnosFiltrados.map(a => (
+            {alumnos.filter(a => {
+              const q = busqueda.toLowerCase();
+              return `${a.primer_nombre} ${a.primer_apellido}`.toLowerCase().includes(q) ||
+                     (a.numero_documento || '').includes(q);
+            }).map(a => (
               <button key={a.id} onClick={() => setAlumno(a)}
                       className="flex items-center gap-3 p-4 bg-[#0a0f18]/60 border border-white/5
                                  rounded-2xl hover:border-primary/30 hover:bg-primary/5 transition-all text-left group">
@@ -163,9 +263,9 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
                 </span>
               </button>
             ))}
-            {alumnosFiltrados.length === 0 && (
+            {alumnos.length === 0 && (
               <p className="col-span-full text-center text-slate-600 text-[10px] font-black uppercase tracking-widest py-10">
-                No se encontraron alumnos
+                No se encontraron alumnos en esta categoría
               </p>
             )}
           </div>
@@ -174,8 +274,17 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
     );
   }
 
-  // ── Paso 2 y 3: Formulario de evaluación ─────────────────────────────────────
-  const dimActiva = DIMENSIONES.find(d => d.key === activaDim);
+  if (loadingItems) {
+    return (
+      <div className="py-20 text-center text-primary animate-pulse font-black uppercase text-[10px] tracking-[0.5em]">
+        Cargando items de evaluación...
+      </div>
+    );
+  }
+
+  // ── Paso 2 y 3: Formulario de evaluación dinámico ────────────────────────────
+  const categoriaActual = itemsPorCategoria[categoriaActiva];
+  const itemsActuales = categoriaActual?.items || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -201,8 +310,14 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
             </p>
             <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{alumno.categoria}</p>
           </div>
+          <div className="ml-auto text-right">
+            <p className="text-[10px] text-slate-500">Promedio</p>
+            <p className={`text-xl font-black italic ${promedioActual >= 75 ? 'text-emerald-400' : promedioActual >= 50 ? 'text-primary' : 'text-amber-400'}`}>
+              {promedioActual}
+            </p>
+          </div>
           {evalExistente && (
-            <span className="ml-auto text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full
+            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full
                              bg-amber-500/15 text-amber-400 border border-amber-500/20">
               Editando existente
             </span>
@@ -210,9 +325,9 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         </div>
       </div>
 
-      {/* Tipo INICIO / FINAL */}
+      {/* Tipo INICIAL / FINAL */}
       <div className="flex gap-3">
-        {['INICIO', 'FINAL'].map(t => (
+        {['INICIAL', 'FINAL'].map(t => (
           <button key={t} onClick={() => setTipo(t)}
                   className={`flex-1 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest
                                border transition-all flex items-center justify-center gap-2
@@ -220,9 +335,9 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
                                  ? 'bg-primary border-primary text-[#05080d]'
                                  : 'bg-white/5 border-white/10 text-slate-400 hover:border-primary/30'}`}>
             <span className="material-symbols-outlined text-base">
-              {t === 'INICIO' ? 'flag' : 'emoji_events'}
+              {t === 'INICIAL' ? 'flag' : 'emoji_events'}
             </span>
-            Evaluación de {t === 'INICIO' ? 'Inicio' : 'Fin'} de Ciclo
+            Evaluación {t === 'INICIAL' ? 'Inicial' : 'Final'} de Ciclo
           </button>
         ))}
       </div>
@@ -230,46 +345,45 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
       {/* Contenido: sliders + radar */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Sliders */}
+        {/* Sliders dinámicos por categoría */}
         <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 space-y-5">
 
-          {/* Tabs de dimensión */}
+          {/* Tabs de categorías */}
           <div className="flex flex-wrap gap-2">
-            {DIMENSIONES.map(d => (
-              <button key={d.key} onClick={() => setActivaDim(d.key)}
+            {categoriasList.map(cat => (
+              <button key={cat} onClick={() => setCategoriaActiva(cat)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black
                                    uppercase tracking-widest border transition-all
-                                   ${activaDim === d.key
+                                   ${categoriaActiva === cat
                                      ? 'bg-white/10 border-white/20 text-white'
                                      : 'bg-transparent border-transparent text-slate-600 hover:text-slate-400'}`}>
-                <span className={`material-symbols-outlined text-sm ${d.color}`}>{d.icon}</span>
-                {d.label}
+                {cat}
               </button>
             ))}
           </div>
 
-          {/* Sliders de la dimensión activa */}
+          {/* Sliders de la categoría activa */}
           <div className="space-y-5">
-            {dimActiva?.campos.map(campo => (
-              <div key={campo.key} className="space-y-2">
+            {itemsActuales.map(item => (
+              <div key={item.id} className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    {campo.label}
+                    {item.nombre}
                   </label>
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-black italic
-                                      ${valores[campo.key] >= 75 ? 'text-emerald-400'
-                                        : valores[campo.key] >= 50 ? 'text-primary'
+                                      ${valores[item.id] >= 75 ? 'text-emerald-400'
+                                        : valores[item.id] >= 50 ? 'text-primary'
                                         : 'text-amber-400'}`}>
-                      {valores[campo.key]}
+                      {valores[item.id] || 50}
                     </span>
                     <span className="text-[8px] text-slate-600 font-bold">/100</span>
                   </div>
                 </div>
                 <input
                   type="range" min="0" max="100" step="5"
-                  value={valores[campo.key]}
-                  onChange={e => handleSlider(campo.key, e.target.value)}
+                  value={valores[item.id] || 50}
+                  onChange={e => handleSlider(item.id, e.target.value)}
                   className="w-full accent-primary cursor-pointer"
                 />
                 <div className="flex justify-between text-[8px] text-slate-700 font-bold uppercase">
@@ -280,24 +394,26 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
           </div>
         </div>
 
-        {/* Radar preview */}
-        <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 flex flex-col">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 italic">
-            Vista previa del radar
-          </p>
-          <div className="flex-1 min-h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                <PolarGrid stroke="#ffffff10" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar name="Habilidades" dataKey="A" stroke="#13ecec" fill="#13ecec" fillOpacity={0.35} />
-              </RadarChart>
-            </ResponsiveContainer>
+        {/* Radar preview y mensaje personalizado */}
+        <div className="space-y-6">
+          <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 italic">
+              Vista previa por categorías
+            </p>
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <PolarGrid stroke="#ffffff10" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Evaluación" dataKey="A" stroke="#13ecec" fill="#13ecec" fillOpacity={0.35} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Observaciones */}
-          <div className="mt-4 space-y-2">
+          <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2rem] p-6 space-y-3">
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
               Observaciones generales
             </label>
@@ -305,10 +421,26 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
               value={observaciones}
               onChange={e => setObservaciones(e.target.value)}
               placeholder="Notas del entrenador sobre esta evaluación..."
-              rows={3}
+              rows={2}
               className="w-full bg-[#020617] border border-white/10 rounded-xl px-4 py-3 text-[11px]
                          text-white outline-none focus:border-primary transition-colors resize-none"
             />
+            
+            {/* Mensaje personalizado */}
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-2 block">
+              Mensaje para el alumno (personalizable)
+            </label>
+            <textarea
+              value={mensajePersonalizado}
+              onChange={e => setMensajePersonalizado(e.target.value)}
+              placeholder="Mensaje automático basado en el promedio..."
+              rows={2}
+              className="w-full bg-[#020617] border border-white/10 rounded-xl px-4 py-3 text-[11px]
+                         text-white outline-none focus:border-primary transition-colors resize-none"
+            />
+            <p className="text-[8px] text-slate-600 text-right">
+              Promedio actual: {promedioActual} pts
+            </p>
           </div>
         </div>
       </div>

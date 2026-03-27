@@ -1,17 +1,33 @@
 // src/components/Avances/ResumenCiclo.jsx
-// Vista de resumen de un ciclo: tabla de alumnos con sus evaluaciones INICIO y FINAL,
-// progreso por dimensión, y acceso rápido a evaluar alumnos pendientes.
+// VERSIÓN DINÁMICA - Con items personalizados por ciclo
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAvances, DIMENSIONES, calcularPromedioDimension } from '../../hooks/useAvances';
-import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
+import { useAvances } from '../../hooks/useAvances';
+import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis, Legend } from 'recharts';
 
 export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }) {
-  const { fetchEvaluacionesCiclo, canEvaluar } = useAvances(currentUser);
-  const [evaluaciones, setEvals]  = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const { 
+    fetchEvaluacionesCiclo, 
+    canEvaluar, 
+    getItemsConCategorias,
+    calcularPromedioEvaluacion,
+    agruparPorCategoria
+  } = useAvances(currentUser);
+  
+  const [evaluaciones, setEvals] = useState([]);
+  const [itemsCiclo, setItemsCiclo] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [alumnoDetalle, setDetalle] = useState(null);
 
+  // Cargar items del ciclo
+  useEffect(() => {
+    if (!ciclo?.id) return;
+    getItemsConCategorias(ciclo.id)
+      .then(setItemsCiclo)
+      .catch(console.error);
+  }, [ciclo?.id, getItemsConCategorias]);
+
+  // Cargar evaluaciones del ciclo
   useEffect(() => {
     fetchEvaluacionesCiclo(ciclo.id)
       .then(setEvals)
@@ -19,34 +35,81 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
       .finally(() => setLoading(false));
   }, [ciclo.id, fetchEvaluacionesCiclo]);
 
-  // Agrupar evaluaciones por alumno
+  // Agrupar evaluaciones por alumno y calcular promedios por categoría
   const alumnosMap = useMemo(() => {
     const map = {};
+    
     evaluaciones.forEach(ev => {
       const id = ev.alumno_id;
       if (!map[id]) {
         map[id] = {
-          alumno: ev.usuarios,
+          alumno: ev.alumno,
           inicio: null,
-          final:  null,
+          final: null,
+          inicioPromedios: {},
+          finalPromedios: {}
         };
       }
-      if (ev.tipo === 'INICIO') map[id].inicio = ev;
-      if (ev.tipo === 'FINAL')  map[id].final  = ev;
+      
+      // Calcular promedios por categoría para esta evaluación
+      const itemsPorCat = {};
+      if (ev.items && ev.items.length > 0) {
+        ev.items.forEach(item => {
+          const catNombre = item.item?.categoria?.nombre || 'Sin categoría';
+          if (!itemsPorCat[catNombre]) {
+            itemsPorCat[catNombre] = {
+              suma: 0,
+              count: 0,
+              items: []
+            };
+          }
+          itemsPorCat[catNombre].suma += item.calificacion;
+          itemsPorCat[catNombre].count++;
+          itemsPorCat[catNombre].items.push({
+            nombre: item.item.nombre,
+            calificacion: item.calificacion
+          });
+        });
+      }
+      
+      // Calcular promedios
+      const promedios = {};
+      Object.entries(itemsPorCat).forEach(([cat, data]) => {
+        promedios[cat] = Math.round(data.suma / data.count);
+      });
+      
+      if (ev.tipo === 'INICIAL') {
+        map[id].inicio = ev;
+        map[id].inicioPromedios = promedios;
+      } else if (ev.tipo === 'FINAL') {
+        map[id].final = ev;
+        map[id].finalPromedios = promedios;
+      }
     });
+    
     return Object.values(map);
   }, [evaluaciones]);
 
-  // Calcular delta (mejora) entre inicio y final
-  const calcDelta = (inicio, final, campos) => {
-    if (!inicio || !final) return null;
-    const pI = calcularPromedioDimension(inicio, campos);
-    const pF = calcularPromedioDimension(final, campos);
-    return pF - pI;
+  // Obtener lista de categorías únicas de este ciclo
+  const categoriasDelCiclo = useMemo(() => {
+    const cats = new Set();
+    itemsCiclo.forEach(item => {
+      if (item.categoria?.nombre) {
+        cats.add(item.categoria.nombre);
+      }
+    });
+    return Array.from(cats);
+  }, [itemsCiclo]);
+
+  // Calcular delta de mejora por categoría
+  const calcDeltaCategoria = (inicioProm, finalProm, categoria) => {
+    const inicio = inicioProm[categoria] || 0;
+    const final = finalProm[categoria] || 0;
+    return final - inicio;
   };
 
   const DeltaBadge = ({ delta }) => {
-    if (delta === null) return <span className="text-[8px] text-slate-600 font-bold">—</span>;
+    if (delta === null || delta === undefined) return <span className="text-[8px] text-slate-600 font-bold">—</span>;
     const color = delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-rose-400' : 'text-slate-400';
     return (
       <span className={`text-[10px] font-black ${color}`}>
@@ -55,19 +118,47 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
     );
   };
 
-  // Panel de detalle de un alumno
+  // Panel de detalle de un alumno (con radar dinámico)
   const PanelDetalle = ({ item }) => {
-    const { alumno, inicio, final } = item;
-    const radarInicio = inicio ? DIMENSIONES.map(d => ({
-      subject: d.label,
-      Inicio:  calcularPromedioDimension(inicio, d.campos.map(c => c.key)),
-      Final:   final ? calcularPromedioDimension(final, d.campos.map(c => c.key)) : null,
-    })) : [];
+    const { alumno, inicio, final, inicioPromedios, finalPromedios } = item;
+    
+    // Preparar datos para el radar (promedios por categoría)
+    const radarData = categoriasDelCiclo.map(cat => ({
+      subject: cat,
+      Inicio: inicioPromedios[cat] || 0,
+      Final: finalPromedios[cat] || 0,
+    }));
+
+    // Obtener items detallados por categoría
+    const itemsDetalle = useMemo(() => {
+      const detalle = {};
+      if (inicio?.items) {
+        inicio.items.forEach(itemEval => {
+          const cat = itemEval.item?.categoria?.nombre || 'Sin categoría';
+          if (!detalle[cat]) detalle[cat] = { inicio: [], final: [] };
+          detalle[cat].inicio.push({
+            nombre: itemEval.item.nombre,
+            calificacion: itemEval.calificacion
+          });
+        });
+      }
+      if (final?.items) {
+        final.items.forEach(itemEval => {
+          const cat = itemEval.item?.categoria?.nombre || 'Sin categoría';
+          if (!detalle[cat]) detalle[cat] = { inicio: [], final: [] };
+          detalle[cat].final.push({
+            nombre: itemEval.item.nombre,
+            calificacion: itemEval.calificacion
+          });
+        });
+      }
+      return detalle;
+    }, [inicio, final]);
 
     return (
       <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
            onClick={() => setDetalle(null)}>
-        <div className="bg-[#0a0f18] border border-white/10 rounded-[2.5rem] p-8 w-full max-w-2xl
+        <div className="bg-[#0a0f18] border border-white/10 rounded-[2.5rem] p-8 w-full max-w-3xl
                         max-h-[90vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-300"
              onClick={e => e.stopPropagation()}>
 
@@ -85,85 +176,105 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
             </button>
           </div>
 
-          {/* Radar comparativo */}
+          {/* Radar comparativo dinámico */}
           {inicio && (
-            <div className="h-64 mb-6">
+            <div className="h-72 mb-6">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 text-center">
-                {final ? 'Comparación Inicio vs Final' : 'Evaluación de Inicio'}
+                {final ? 'Comparación Inicio vs Final por Categoría' : 'Evaluación de Inicio'}
               </p>
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarInicio}>
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid stroke="#ffffff10" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar name="Inicio" dataKey="Inicio" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.2} />
                   {final && (
                     <Radar name="Final" dataKey="Final" stroke="#13ecec" fill="#13ecec" fillOpacity={0.35} />
                   )}
+                  <Legend 
+                    wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }}
+                    formatter={(value) => <span className="text-slate-400">{value}</span>}
+                  />
                 </RadarChart>
               </ResponsiveContainer>
-              {final && (
-                <div className="flex justify-center gap-6 mt-2">
-                  <span className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-400">
-                    <span className="w-3 h-0.5 bg-slate-400 inline-block" />Inicio
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[9px] font-black uppercase text-primary">
-                    <span className="w-3 h-0.5 bg-primary inline-block" />Final
-                  </span>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Tabla de dimensiones */}
-          <div className="space-y-3">
-            {DIMENSIONES.map(dim => {
-              const campos = dim.campos.map(c => c.key);
-              const pI = inicio ? calcularPromedioDimension(inicio, campos) : null;
-              const pF = final  ? calcularPromedioDimension(final,  campos) : null;
-              const delta = pI !== null && pF !== null ? pF - pI : null;
+          {/* Tabla de categorías con promedios */}
+          <div className="space-y-4 mb-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              Promedios por categoría
+            </p>
+            {categoriasDelCiclo.map(cat => {
+              const pI = inicioPromedios[cat] || 0;
+              const pF = finalPromedios[cat] || 0;
+              const delta = pF - pI;
               return (
-                <div key={dim.key} className="flex items-center justify-between bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-2">
-                    <span className={`material-symbols-outlined text-base ${dim.color}`}>{dim.icon}</span>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white">{dim.label}</span>
+                <div key={cat} className="bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-primary">{cat}</span>
+                    <DeltaBadge delta={delta} />
                   </div>
-                  <div className="flex items-center gap-6 text-right">
-                    <div>
+                  <div className="flex gap-6 text-right">
+                    <div className="flex-1">
                       <p className="text-[8px] text-slate-600 font-bold uppercase">Inicio</p>
-                      <p className="font-black text-slate-400 text-sm">{pI ?? '—'}</p>
+                      <p className="font-black text-slate-400 text-lg">{pI}</p>
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="text-[8px] text-slate-600 font-bold uppercase">Final</p>
-                      <p className="font-black text-primary text-sm">{pF ?? '—'}</p>
+                      <p className="font-black text-primary text-lg">{pF || '—'}</p>
                     </div>
-                    <div>
-                      <p className="text-[8px] text-slate-600 font-bold uppercase">Δ</p>
-                      <DeltaBadge delta={delta} />
-                    </div>
+                  </div>
+                  
+                  {/* Items detallados de esta categoría */}
+                  <div className="mt-3 pt-2 border-t border-white/10 grid grid-cols-2 gap-2">
+                    {itemsDetalle[cat]?.inicio.map((item, idx) => {
+                      const itemFinal = itemsDetalle[cat]?.final.find(i => i.nombre === item.nombre);
+                      return (
+                        <div key={idx} className="text-[9px] flex justify-between">
+                          <span className="text-slate-500">{item.nombre}</span>
+                          <div className="flex gap-2">
+                            <span className="text-slate-400">{item.calificacion}</span>
+                            {itemFinal && (
+                              <span className="text-primary">→ {itemFinal.calificacion}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Observaciones */}
-          {(inicio?.observaciones || final?.observaciones) && (
-            <div className="mt-4 space-y-2">
-              {inicio?.observaciones && (
-                <div className="bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-1">Notas Inicio</p>
-                  <p className="text-[11px] text-slate-300 italic">"{inicio.observaciones}"</p>
-                </div>
-              )}
-              {final?.observaciones && (
-                <div className="bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-1">Notas Final</p>
-                  <p className="text-[11px] text-slate-300 italic">"{final.observaciones}"</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Observaciones y mensaje personalizado */}
+          <div className="space-y-3">
+            {inicio?.observaciones && (
+              <div className="bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-1">Notas Inicio</p>
+                <p className="text-[11px] text-slate-300 italic">"{inicio.observaciones}"</p>
+              </div>
+            )}
+            {inicio?.mensaje_personalizado && (
+              <div className="bg-primary/10 px-5 py-3 rounded-2xl border border-primary/20">
+                <p className="text-[8px] font-black uppercase tracking-widest text-primary mb-1">Mensaje al alumno</p>
+                <p className="text-[11px] text-primary/80 italic">"{inicio.mensaje_personalizado}"</p>
+              </div>
+            )}
+            {final?.observaciones && (
+              <div className="bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-1">Notas Final</p>
+                <p className="text-[11px] text-slate-300 italic">"{final.observaciones}"</p>
+              </div>
+            )}
+            {final?.mensaje_personalizado && final !== inicio && (
+              <div className="bg-primary/10 px-5 py-3 rounded-2xl border border-primary/20">
+                <p className="text-[8px] font-black uppercase tracking-widest text-primary mb-1">Mensaje al alumno</p>
+                <p className="text-[11px] text-primary/80 italic">"{final.mensaje_personalizado}"</p>
+              </div>
+            )}
+          </div>
 
           {canEvaluar && ciclo.activo && (
             <div className="mt-6 flex justify-end">
@@ -181,6 +292,11 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
     );
   };
 
+  // Calcular estadísticas
+  const totalAlumnos = alumnosMap.length;
+  const completos = alumnosMap.filter(a => a.inicio && a.final).length;
+  const pendientes = alumnosMap.filter(a => !a.inicio || !a.final).length;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
 
@@ -196,28 +312,30 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
             Resumen: <span className="text-primary">{ciclo.nombre}</span>
           </h3>
           <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-            {alumnosMap.length} alumnos evaluados ·{' '}
-            {alumnosMap.filter(a => a.inicio && a.final).length} completos
+            {totalAlumnos} alumnos inscritos · {completos} evaluaciones completas
           </p>
         </div>
       </div>
 
       {/* Stats rápidas */}
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Evaluados"    value={alumnosMap.length}                                          color="primary" />
-        <StatCard label="Completos"    value={alumnosMap.filter(a => a.inicio && a.final).length}         color="emerald" />
-        <StatCard label="Pendientes"   value={alumnosMap.filter(a => !a.inicio || !a.final).length}       color="amber" />
+        <StatCard label="Inscritos" value={totalAlumnos} color="primary" />
+        <StatCard label="Completos" value={completos} color="emerald" />
+        <StatCard label="Pendientes" value={pendientes} color="amber" />
       </div>
 
       {loading ? (
         <div className="py-16 text-center text-primary animate-pulse text-[10px] font-black uppercase tracking-widest">
           Cargando evaluaciones...
         </div>
-      ) : alumnosMap.length === 0 ? (
+      ) : totalAlumnos === 0 ? (
         <div className="py-16 text-center border-2 border-dashed border-white/10 rounded-[2rem] space-y-3">
-          <span className="material-symbols-outlined text-5xl text-slate-700">assignment</span>
+          <span className="material-symbols-outlined text-5xl text-slate-700">group_add</span>
           <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">
-            No hay evaluaciones en este ciclo aún
+            No hay alumnos inscritos en este ciclo
+          </p>
+          <p className="text-slate-600 text-[8px] uppercase">
+            Inscribe alumnos desde el panel de administración
           </p>
         </div>
       ) : (
@@ -226,6 +344,7 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
             <AlumnoRow
               key={item.alumno?.id}
               item={item}
+              categoriasDelCiclo={categoriasDelCiclo}
               canEvaluar={canEvaluar && ciclo.activo}
               onDetalle={() => setDetalle(item)}
               onEvaluar={() => onEvaluar(item.alumno)}
@@ -239,10 +358,14 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
   );
 }
 
-function AlumnoRow({ item, canEvaluar, onDetalle, onEvaluar }) {
-  const { alumno, inicio, final } = item;
+function AlumnoRow({ item, categoriasDelCiclo, canEvaluar, onDetalle, onEvaluar }) {
+  const { alumno, inicio, final, inicioPromedios, finalPromedios } = item;
   const tieneAmbas = inicio && final;
-
+  
+  // Calcular promedio general
+  const promedioGeneralInicio = Object.values(inicioPromedios).reduce((a, b) => a + b, 0) / (Object.keys(inicioPromedios).length || 1);
+  const promedioGeneralFinal = Object.values(finalPromedios).reduce((a, b) => a + b, 0) / (Object.keys(finalPromedios).length || 1);
+  
   return (
     <div className="flex items-center gap-4 p-5 bg-[#0a0f18]/60 border border-white/5 rounded-2xl
                     hover:border-white/10 transition-all">
@@ -260,9 +383,15 @@ function AlumnoRow({ item, canEvaluar, onDetalle, onEvaluar }) {
         <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{alumno?.categoria}</p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <StatusPill label="Inicio" done={!!inicio} />
-        <StatusPill label="Final"  done={!!final} />
+      <div className="flex items-center gap-4">
+        <div className="text-right">
+          <p className="text-[8px] text-slate-600">Inicio</p>
+          <p className="font-black text-slate-400 text-sm">{Math.round(promedioGeneralInicio) || '—'}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[8px] text-slate-600">Final</p>
+          <p className="font-black text-primary text-sm">{Math.round(promedioGeneralFinal) || '—'}</p>
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -286,13 +415,6 @@ function AlumnoRow({ item, canEvaluar, onDetalle, onEvaluar }) {
     </div>
   );
 }
-
-const StatusPill = ({ label, done }) => (
-  <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full
-                    ${done ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-slate-600'}`}>
-    {done ? '✓ ' : '○ '}{label}
-  </span>
-);
 
 const StatCard = ({ label, value, color }) => {
   const colors = {

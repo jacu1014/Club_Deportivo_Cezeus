@@ -1,13 +1,9 @@
 // src/components/SeguimientoAlumno.jsx
-// CAMBIOS vs versión anterior:
-//  - El radar ahora se alimenta desde la última evaluación guardada en BD
-//    en lugar de campos stat_* directos del alumno
-//  - Se muestra comparación Inicio vs Final del ciclo más reciente
-//  - Las observaciones se persisten en observaciones_seguimiento (via useAvances)
+// VERSIÓN DINÁMICA - Con radar basado en items personalizados
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useAvances, evaluacionARadar, DIMENSIONES, calcularPromedioDimension } from '../hooks/useAvances';
+import { useAvances } from '../hooks/useAvances';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
   ResponsiveContainer, PolarRadiusAxis, Legend
@@ -22,7 +18,7 @@ const SeguimientoAlumno = ({
   onEliminarNota,
   onSelectAlumno
 }) => {
-  const { fetchEvaluacionesAlumno, canEvaluar } = useAvances(currentUser);
+  const { fetchEvaluacionesAlumno, canEvaluar, getItemsConCategorias } = useAvances(currentUser);
 
   const [escribiendo, setEscribiendo]   = useState(false);
   const [editandoId, setEditandoId]     = useState(null);
@@ -38,6 +34,7 @@ const SeguimientoAlumno = ({
   // Evaluaciones del alumno seleccionado
   const [evaluaciones, setEvals]        = useState([]);
   const [loadingEvals, setLoadingEvals] = useState(false);
+  const [itemsPorCiclo, setItemsPorCiclo] = useState({});
 
   const canManage = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'ENTRENADOR', 'DIRECTOR'].includes(currentUser?.rol);
 
@@ -49,10 +46,21 @@ const SeguimientoAlumno = ({
     if (!alumno?.id) return;
     setLoadingEvals(true);
     fetchEvaluacionesAlumno(alumno.id)
-      .then(setEvals)
+      .then(async (evals) => {
+        setEvals(evals);
+        
+        // Cargar items de los ciclos de las evaluaciones
+        const ciclosIds = [...new Set(evals.map(e => e.ciclo_id))];
+        const itemsMap = {};
+        for (const cicloId of ciclosIds) {
+          const items = await getItemsConCategorias(cicloId);
+          itemsMap[cicloId] = items;
+        }
+        setItemsPorCiclo(itemsMap);
+      })
       .catch(console.error)
       .finally(() => setLoadingEvals(false));
-  }, [alumno?.id, fetchEvaluacionesAlumno]);
+  }, [alumno?.id, fetchEvaluacionesAlumno, getItemsConCategorias]);
 
   const fetchAlumnosSeguimiento = async () => {
     try {
@@ -94,36 +102,80 @@ const SeguimientoAlumno = ({
   };
   const countEst = (est) => alumnos.filter(a => (a.estado || 'Activo').toLowerCase() === est.toLowerCase()).length;
 
-  // Datos para el radar
-  // Prioridad: último ciclo con eval FINAL; fallback: INICIO más reciente
-  const ultimoFinal  = evaluaciones.find(e => e.tipo === 'FINAL');
-  const ultimoInicio = evaluaciones.find(e => e.tipo === 'INICIO');
-  const evalPrincipal = ultimoFinal || ultimoInicio;
-
-  // Radar comparativo: si hay ambos en el mismo ciclo, los mostramos juntos
-  const radarData = useMemo(() => {
-    if (!evalPrincipal) return DIMENSIONES.map(d => ({
-      subject: d.label,
-      Actual: 50,
-    }));
-
-    // Buscar si hay evaluación de inicio del mismo ciclo que el final
-    const cicloId     = evalPrincipal.ciclo_id;
-    const evalInicio  = evaluaciones.find(e => e.ciclo_id === cicloId && e.tipo === 'INICIO');
-    const evalFinalDim = evaluaciones.find(e => e.ciclo_id === cicloId && e.tipo === 'FINAL');
-
-    return DIMENSIONES.map(d => {
-      const campos = d.campos.map(c => c.key);
-      const row = { subject: d.label };
-      if (evalInicio)   row['Inicio'] = calcularPromedioDimension(evalInicio,   campos);
-      if (evalFinalDim) row['Final']  = calcularPromedioDimension(evalFinalDim, campos);
-      if (!evalInicio && !evalFinalDim) row['Actual'] = calcularPromedioDimension(evalPrincipal, campos);
-      return row;
+  // Calcular promedios por categoría para una evaluación
+  const calcularPromediosPorCategoria = (evaluacion, itemsDelCiclo) => {
+    if (!evaluacion || !evaluacion.items) return {};
+    
+    const promedios = {};
+    const itemsPorCat = {};
+    
+    evaluacion.items.forEach(itemEval => {
+      const catNombre = itemEval.item?.categoria?.nombre || 'Sin categoría';
+      if (!itemsPorCat[catNombre]) {
+        itemsPorCat[catNombre] = { suma: 0, count: 0 };
+      }
+      itemsPorCat[catNombre].suma += itemEval.calificacion;
+      itemsPorCat[catNombre].count++;
     });
-  }, [evaluaciones, evalPrincipal]);
+    
+    Object.entries(itemsPorCat).forEach(([cat, data]) => {
+      promedios[cat] = Math.round(data.suma / data.count);
+    });
+    
+    return promedios;
+  };
 
-  const tieneComparacion = radarData[0] && 'Inicio' in radarData[0] && 'Final' in radarData[0];
-  const tieneSoloActual  = radarData[0] && 'Actual' in radarData[0];
+  // Preparar datos para el radar
+  const radarData = useMemo(() => {
+    if (!evaluaciones.length) return [];
+
+    // Buscar el ciclo más reciente con evaluación FINAL, o el más reciente en general
+    const evaluacionesConItems = evaluaciones.filter(e => e.items && e.items.length > 0);
+    if (evaluacionesConItems.length === 0) return [];
+
+    // Ordenar por fecha y tomar la más reciente
+    const evaluacionesOrdenadas = [...evaluacionesConItems].sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
+    const ultimaEval = evaluacionesOrdenadas[0];
+    
+    const itemsDelCiclo = itemsPorCiclo[ultimaEval.ciclo_id] || [];
+    
+    // Obtener categorías únicas de este ciclo
+    const categorias = [...new Set(itemsDelCiclo.map(i => i.categoria?.nombre).filter(Boolean))];
+    
+    // Buscar evaluación del mismo ciclo pero de tipo INICIAL para comparar
+    const evalInicioDelMismoCiclo = evaluaciones.find(
+      e => e.ciclo_id === ultimaEval.ciclo_id && e.tipo === 'INICIAL' && e.items?.length
+    );
+    
+    // Calcular promedios por categoría
+    const promediosFinal = calcularPromediosPorCategoria(ultimaEval, itemsDelCiclo);
+    const promediosInicio = evalInicioDelMismoCiclo 
+      ? calcularPromediosPorCategoria(evalInicioDelMismoCiclo, itemsDelCiclo)
+      : {};
+    
+    // Construir datos para el radar
+    const data = categorias.map(cat => ({
+      subject: cat,
+      Inicio: promediosInicio[cat] || 0,
+      Final: promediosFinal[cat] || 0,
+    }));
+    
+    return data;
+  }, [evaluaciones, itemsPorCiclo]);
+
+  const tieneComparacion = radarData.length > 0 && radarData[0]?.Inicio !== undefined && radarData[0]?.Final !== undefined;
+  const tieneSoloFinal = radarData.length > 0 && !tieneComparacion;
+
+  // Obtener información del ciclo más reciente
+  const cicloInfo = useMemo(() => {
+    if (!evaluaciones.length) return null;
+    const evaluacionesOrdenadas = [...evaluaciones].sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
+    return evaluacionesOrdenadas[0]?.ciclo;
+  }, [evaluaciones]);
 
   if (loading && !alumno) {
     return (
@@ -282,10 +334,10 @@ const SeguimientoAlumno = ({
             <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em] italic opacity-60">
               Análisis de Desempeño
             </h3>
-            {evalPrincipal && (
+            {cicloInfo && (
               <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full
                                bg-primary/10 text-primary border border-primary/20">
-                {evalPrincipal.ciclos_evaluacion?.nombre || 'Ciclo reciente'}
+                {cicloInfo.nombre}
               </span>
             )}
           </div>
@@ -294,7 +346,7 @@ const SeguimientoAlumno = ({
             <div className="flex-1 flex items-center justify-center text-primary animate-pulse text-[10px] font-black uppercase tracking-widest">
               Cargando evaluaciones...
             </div>
-          ) : !evalPrincipal ? (
+          ) : radarData.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 opacity-40">
               <span className="material-symbols-outlined text-5xl text-slate-600">analytics</span>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -306,17 +358,21 @@ const SeguimientoAlumno = ({
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid stroke="#ffffff10" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 900 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                   {tieneComparacion && (
                     <>
                       <Radar name="Inicio" dataKey="Inicio" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.2} />
                       <Radar name="Final"  dataKey="Final"  stroke="#13ecec" fill="#13ecec" fillOpacity={0.4} />
-                      <Legend iconType="line" wrapperStyle={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase' }} />
+                      <Legend 
+                        iconType="line" 
+                        wrapperStyle={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase' }}
+                        formatter={(value) => <span className="text-slate-400">{value}</span>}
+                      />
                     </>
                   )}
-                  {tieneSoloActual && (
-                    <Radar name="Actual" dataKey="Actual" stroke="#13ecec" fill="#13ecec" fillOpacity={0.4} />
+                  {tieneSoloFinal && (
+                    <Radar name="Evaluación" dataKey="Final" stroke="#13ecec" fill="#13ecec" fillOpacity={0.4} />
                   )}
                 </RadarChart>
               </ResponsiveContainer>
@@ -325,7 +381,7 @@ const SeguimientoAlumno = ({
         </div>
       </div>
 
-      {/* Bitácora */}
+      {/* Bitácora - sin cambios */}
       <div className="bg-[#0a0f18]/60 border border-white/10 rounded-[2.5rem] overflow-hidden">
         <div className="px-8 py-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
           <div className="flex items-center gap-3">
