@@ -1,7 +1,7 @@
 // src/components/Avances/ModalCiclo.jsx
-// VERSIÓN MODIFICADA - Con items personalizables por categoría
+// VERSIÓN OPTIMIZADA - Creación de estructura dinámica paso a paso
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAvances } from '../../hooks/useAvances';
 
@@ -9,6 +9,10 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
   const { categoriasBase } = useAvances(currentUser);
   
   const hoy = new Date().toISOString().split('T')[0];
+  const [paso, setPaso] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
   const [form, setForm] = useState({
     nombre: '',
     descripcion: '',
@@ -17,321 +21,169 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     activo: true,
   });
   
-  // Nueva estructura: categorías seleccionadas con sus items
+  // Estructura: [{ id: 'tecnica', items: ['Pase', 'Control'] }, ...]
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [paso, setPaso] = useState(1); // 1: datos básicos, 2: items por categoría
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  // Seleccionar/deseleccionar categoría
-  const toggleCategoria = (categoriaId) => {
+  const toggleCategoria = (cat) => {
     setCategoriasSeleccionadas(prev => {
-      const existe = prev.find(c => c.id === categoriaId);
-      if (existe) {
-        return prev.filter(c => c.id !== categoriaId);
-      } else {
-        const categoria = categoriasBase?.find(c => c.id === categoriaId);
-        return [...prev, { 
-          id: categoriaId, 
-          nombre: categoria?.nombre,
-          items: [] 
-        }];
-      }
+      const existe = prev.find(c => c.id === cat.id);
+      if (existe) return prev.filter(c => c.id !== cat.id);
+      return [...prev, { ...cat, items: [''] }]; // Inicia con un item vacío
     });
   };
 
-  // Agregar item a una categoría
-  const agregarItem = (categoriaId, itemNombre) => {
-    if (!itemNombre.trim()) return;
-    setCategoriasSeleccionadas(prev => prev.map(cat => {
-      if (cat.id === categoriaId) {
-        return {
-          ...cat,
-          items: [...cat.items, { nombre: itemNombre.trim(), id: Date.now() }]
-        };
+  const handleItemChange = (catId, index, value) => {
+    setCategoriasSeleccionadas(prev => prev.map(c => {
+      if (c.id === catId) {
+        const nuevosItems = [...c.items];
+        nuevosItems[index] = value;
+        return { ...c, items: nuevosItems };
       }
-      return cat;
+      return c;
     }));
   };
 
-  // Eliminar item de una categoría
-  const eliminarItem = (categoriaId, itemIndex) => {
-    setCategoriasSeleccionadas(prev => prev.map(cat => {
-      if (cat.id === categoriaId) {
-        return {
-          ...cat,
-          items: cat.items.filter((_, idx) => idx !== itemIndex)
-        };
-      }
-      return cat;
-    }));
+  const addItem = (catId) => {
+    setCategoriasSeleccionadas(prev => prev.map(c => 
+      c.id === catId ? { ...c, items: [...c.items, ''] } : c
+    ));
+  };
+
+  const removeItem = (catId, index) => {
+    setCategoriasSeleccionadas(prev => prev.map(c => 
+      c.id === catId ? { ...c, items: c.items.filter((_, i) => i !== index) } : c
+    ));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (paso === 1) {
-      // Validar paso 1 (solo datos básicos, NO items)
-      if (!form.nombre.trim()) return setError('El nombre es obligatorio.');
-      if (!form.fecha_fin) return setError('La fecha de fin es obligatoria.');
-      if (form.fecha_fin < form.fecha_inicio) {
-        return setError('La fecha de fin debe ser posterior al inicio.');
+      if (!form.nombre || categoriasSeleccionadas.length === 0) {
+        return setError('Nombre y al menos una categoría son obligatorios');
       }
-      if (categoriasSeleccionadas.length === 0) {
-        return setError('Debes seleccionar al menos una categoría.');
-      }
-      
-      // ✅ ELIMINADA la validación de items aquí
-      // Los items se agregarán en el Paso 2
-      
       setError('');
       setPaso(2);
       return;
     }
-    
-    // Paso 2: Guardar ciclo con items
+
+    // Guardado Final
     setSaving(true);
     try {
-      // ✅ Validar que todas las categorías tengan al menos un item ANTES de guardar
-      const categoriasSinItems = categoriasSeleccionadas.filter(cat => cat.items.length === 0);
-      if (categoriasSinItems.length > 0) {
-        throw new Error(`Las siguientes categorías deben tener al menos un item: ${categoriasSinItems.map(c => c.nombre).join(', ')}`);
-      }
-      
-      // Preparar items para guardar
-      const itemsToSave = [];
-      categoriasSeleccionadas.forEach(cat => {
-        cat.items.forEach((item) => {
-          itemsToSave.push({
-            categoria_id: cat.id,
-            nombre: item.nombre,
-            orden: itemsToSave.length
-          });
-        });
+      // 1. Crear el Ciclo
+      const { data: cicloId, error: errC } = await supabase.rpc('crear_ciclo_completo', {
+        p_nombre: form.nombre,
+        p_desc: form.descripcion,
+        p_inicio: form.fecha_inicio,
+        p_fin: form.fecha_fin,
+        p_creador: currentUser.id,
+        p_categorias: categoriasSeleccionadas.map(c => ({
+          id: c.id,
+          items: c.items.filter(i => i.trim() !== '')
+        }))
       });
-      
-      await onGuardar({
-        ...form,
-        items: itemsToSave
-      });
-      
-      // Si todo sale bien, el modal se cerrará desde onGuardar
+
+      if (errC) throw errC;
+      onGuardar();
+      onClose();
     } catch (err) {
       setError(err.message);
+    } finally {
       setSaving(false);
     }
   };
 
-  const volverPaso1 = () => {
-    setPaso(1);
-    setError('');
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#0a0f18] border border-white/10 rounded-[2.5rem] p-8 w-full max-w-2xl space-y-6
-                      animate-in zoom-in-95 fade-in duration-300 max-h-[90vh] overflow-y-auto">
-
-        <div className="flex items-center justify-between">
-          <h3 className="font-black text-white uppercase italic text-lg tracking-tight">
-            {paso === 1 ? 'Nuevo' : 'Configurar'} <span className="text-primary">Ciclo</span>
-          </h3>
-          <button onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-white/5 text-slate-400 hover:text-white
-                             flex items-center justify-center transition-colors">
-            <span className="material-symbols-outlined text-sm">close</span>
-          </button>
-        </div>
-
-        {/* Indicador de pasos */}
-        <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-widest">
-          <span className={`px-2 py-1 rounded-full ${paso === 1 ? 'bg-primary text-[#05080d]' : 'bg-white/10 text-slate-500'}`}>
-            Paso 1
-          </span>
-          <span className="text-slate-700">→</span>
-          <span className={`px-2 py-1 rounded-full ${paso === 2 ? 'bg-primary text-[#05080d]' : 'bg-white/10 text-slate-500'}`}>
-            Paso 2
-          </span>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#020617]/90 backdrop-blur-md">
+      <div className="bg-[#0a0f18] border border-white/10 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+        
+        <form onSubmit={handleSubmit} className="p-8 sm:p-12 space-y-8">
           
-          {/* PASO 1: Datos básicos y selección de categorías */}
-          {paso === 1 && (
-            <>
-              {/* Nombre */}
-              <Field label="Nombre del ciclo *" hint='Ej: "Ciclo Técnico 2026"'>
-                <input
-                  value={form.nombre}
-                  onChange={e => set('nombre', e.target.value)}
-                  placeholder="CICLO TÉCNICO 2026"
-                  className={INPUT}
-                  required
-                />
+          {/* Header */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-white font-black italic uppercase text-2xl">Nuevo Ciclo</h2>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">
+                Paso {paso} de 2: {paso === 1 ? 'Configuración Básica' : 'Estructura Técnica'}
+              </p>
+            </div>
+            <button type="button" onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          {paso === 1 ? (
+            <div className="space-y-6">
+              <Field label="Nombre del Ciclo" hint="Ej: Primer Semestre 2026">
+                <input type="text" value={form.nombre} onChange={e => set(e.target.name, e.target.value)} name="nombre" placeholder="Nombre..." className={INPUT} required />
               </Field>
 
-              {/* Descripción */}
-              <Field label="Descripción (opcional)">
-                <textarea
-                  value={form.descripcion}
-                  onChange={e => set('descripcion', e.target.value)}
-                  placeholder="Objetivos del ciclo..."
-                  rows={2}
-                  className={`${INPUT} resize-none`}
-                />
-              </Field>
-
-              {/* Fechas */}
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Fecha inicio *">
-                  <input type="date" value={form.fecha_inicio}
-                         onChange={e => set('fecha_inicio', e.target.value)}
-                         className={INPUT} required />
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Fecha Inicio">
+                  <input type="date" value={form.fecha_inicio} onChange={e => set(e.target.name, e.target.value)} name="fecha_inicio" className={INPUT} />
                 </Field>
-                <Field label="Fecha fin *">
-                  <input type="date" value={form.fecha_fin}
-                         onChange={e => set('fecha_fin', e.target.value)}
-                         min={form.fecha_inicio}
-                         className={INPUT} required />
+                <Field label="Fecha Fin (Opcional)">
+                  <input type="date" value={form.fecha_fin} onChange={e => set(e.target.name, e.target.value)} name="fecha_fin" className={INPUT} />
                 </Field>
               </div>
 
-              {/* Selección de categorías */}
-              <Field label="Categorías a evaluar *" hint="Selecciona múltiples categorías">
+              <Field label="Categorías a Evaluar" hint="Selecciona los pilares del ciclo">
                 <div className="flex flex-wrap gap-2">
-                  {categoriasBase?.map(cat => {
-                    const seleccionada = categoriasSeleccionadas.some(c => c.id === cat.id);
+                  {categoriasBase.map(cat => {
+                    const sel = categoriasSeleccionadas.find(c => c.id === cat.id);
                     return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => toggleCategoria(cat.id)}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border
-                                     ${seleccionada
-                                       ? 'bg-primary border-primary text-[#05080d]'
-                                       : 'bg-white/5 border-white/10 text-slate-400 hover:border-primary/30'}`}
-                      >
-                        {seleccionada ? '✓ ' : '+ '}{cat.nombre}
+                      <button key={cat.id} type="button" onClick={() => toggleCategoria(cat)}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 border ${
+                          sel ? 'bg-primary text-black border-primary' : 'bg-white/5 text-slate-500 border-white/10 hover:border-white/20'
+                        }`}>
+                        <span className="material-symbols-outlined text-xs">{cat.icono}</span>
+                        {cat.nombre}
                       </button>
                     );
                   })}
                 </div>
               </Field>
-
-              {/* Lista de categorías seleccionadas con conteo de items */}
-              {categoriasSeleccionadas.length > 0 && (
-                <div className="bg-white/5 rounded-xl p-4 space-y-2">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Categorías seleccionadas:
-                  </p>
-                  {categoriasSeleccionadas.map(cat => (
-                    <div key={cat.id} className="flex justify-between items-center text-[10px]">
-                      <span className="text-white">{cat.nombre}</span>
-                      <span className="text-primary text-[8px]">
-                        {cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* PASO 2: Configurar items por categoría */}
-          {paso === 2 && (
-            <div className="space-y-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                Define los items específicos a evaluar en cada categoría
-              </p>
-              
-              {categoriasSeleccionadas.map(categoria => (
-                <div key={categoria.id} className="border border-white/10 rounded-xl p-4 space-y-3">
-                  <h4 className="font-black text-primary text-[11px] uppercase tracking-wider">
-                    {categoria.nombre}
-                  </h4>
-                  
-                  {/* Lista de items existentes */}
-                  <div className="space-y-2">
-                    {categoria.items.length === 0 ? (
-                      <p className="text-[9px] text-slate-500 italic">No hay items agregados aún</p>
-                    ) : (
-                      categoria.items.map((item, idx) => (
-                        <div key={item.id} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
-                          <span className="text-[10px] text-white flex-1">{item.nombre}</span>
-                          <button
-                            type="button"
-                            onClick={() => eliminarItem(categoria.id, idx)}
-                            className="text-rose-400 hover:text-rose-300 text-[10px]"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  
-                  {/* Agregar nuevo item */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nuevo item (ej: Pase con orientación)"
-                      className="flex-1 bg-[#020617] border border-white/10 rounded-lg px-3 py-2 text-[11px]
-                                 text-white outline-none focus:border-primary"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          agregarItem(categoria.id, e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const input = e.target.previousSibling;
-                        if (input.value.trim()) {
-                          agregarItem(categoria.id, input.value);
-                          input.value = '';
-                        }
-                      }}
-                      className="bg-primary/20 text-primary px-3 rounded-lg text-[10px] font-black uppercase
-                                 hover:bg-primary/30 transition-colors"
-                    >
-                      Agregar
+            </div>
+          ) : (
+            <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {categoriasSeleccionadas.map(cat => (
+                <div key={cat.id} className="bg-white/5 border border-white/5 rounded-[2rem] p-6 space-y-4">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span className="text-primary font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">{cat.icono}</span>
+                      {cat.nombre}
+                    </span>
+                    <button type="button" onClick={() => addItem(cat.id)} className="text-[9px] font-black uppercase text-slate-500 hover:text-white flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs">add</span> Añadir Item
                     </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    {cat.items.map((item, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <input type="text" value={item} onChange={e => handleItemChange(cat.id, idx, e.target.value)} 
+                          placeholder="Ej: Control dirigido, Resistencia física..." className={INPUT} />
+                        <button type="button" onClick={() => removeItem(cat.id, idx)} className="p-3 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors">
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {error && (
-            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest bg-rose-500/10
-                          border border-rose-500/20 px-4 py-2 rounded-xl">
-              ✕ {error}
-            </p>
-          )}
+          {error && <p className="text-rose-500 text-[9px] font-black uppercase text-center">{error}</p>}
 
-          {/* Botones */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-4">
             {paso === 2 && (
-              <button type="button" onClick={volverPaso1}
-                      className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest
-                                 border border-white/10 text-slate-400 hover:border-white/20 transition-all">
-                ← Volver
+              <button type="button" onClick={() => setPaso(1)} className="flex-1 py-4 rounded-2xl text-[10px] font-black uppercase text-slate-500 border border-white/10 hover:border-white/20">
+                Atrás
               </button>
             )}
-            <button type="button" onClick={onClose}
-                    className={`${paso === 2 ? 'flex-1' : ''} py-3 rounded-xl text-[10px] font-black uppercase tracking-widest
-                                 border border-white/10 text-slate-400 hover:border-white/20 transition-all`}>
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-                    className={`${paso === 2 ? 'flex-1' : ''} py-3 rounded-xl text-[10px] font-black uppercase tracking-widest
-                                 bg-primary text-[#05080d] hover:bg-[#0AB5B5] transition-all disabled:opacity-50`}>
-              {saving ? 'Creando...' : paso === 1 ? 'Siguiente →' : 'Crear Ciclo'}
+            <button type="submit" disabled={saving} className="flex-[2] py-4 rounded-2xl bg-primary text-black font-black uppercase text-[10px] shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+              {saving ? 'Procesando...' : paso === 1 ? 'Siguiente Paso' : 'Confirmar y Crear Ciclo'}
             </button>
           </div>
         </form>
@@ -340,15 +192,14 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
   );
 }
 
-const INPUT = `w-full bg-[#020617] border border-white/10 rounded-xl px-4 py-3 text-[11px] font-bold
-               text-white outline-none focus:border-primary transition-colors placeholder:text-white/20`;
-
 const Field = ({ label, hint, children }) => (
   <div className="space-y-2">
-    <div className="flex items-baseline gap-2">
-      <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</label>
-      {hint && <span className="text-[8px] text-slate-700 italic normal-case">{hint}</span>}
+    <div className="flex justify-between items-end px-2">
+      <label className="text-white font-black uppercase text-[10px] tracking-widest">{label}</label>
+      {hint && <span className="text-slate-600 text-[8px] font-bold uppercase">{hint}</span>}
     </div>
     {children}
   </div>
 );
+
+const INPUT = `w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs text-white outline-none focus:border-primary/40 transition-all placeholder:text-slate-700`;

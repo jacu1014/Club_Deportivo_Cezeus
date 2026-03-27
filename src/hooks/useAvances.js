@@ -1,322 +1,146 @@
 // src/hooks/useAvances.js
-// Hook central del módulo Avances de Procesos - VERSIÓN DINÁMICA
+// VERSIÓN OPTIMIZADA: Con Caché, Comparativas y Lógica Centralizada
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { registrarLog } from '../lib/activity';
 
-// ============================================
-// FUNCIONES PARA ESTRUCTURA DINÁMICA
-// ============================================
+// Objeto externo para persistir caché entre re-renders del hook
+const cacheItems = {};
 
-/** Obtiene los items de un ciclo con sus categorías */
-export const getItemsConCategorias = async (cicloId) => {
-  if (!cicloId) return [];
-  
-  const { data, error } = await supabase
-    .from('ciclos_items')
-    .select(`
-      *,
-      categoria:categorias_base(*)
-    `)
-    .eq('ciclo_id', cicloId)
-    .order('orden');
-  
-  if (error) throw error;
-  return data || [];
-};
+export const useAvances = (currentUser) => {
+  const [ciclos, setCiclos] = useState([]);
+  const [loadingCiclos, setLoadingCiclos] = useState(true);
 
-/** Calcula el promedio de calificaciones de una evaluación */
-export const calcularPromedioEvaluacion = (itemsCalificaciones) => {
-  if (!itemsCalificaciones || itemsCalificaciones.length === 0) return 0;
-  const suma = itemsCalificaciones.reduce((acc, item) => acc + item.calificacion, 0);
-  return Math.round(suma / itemsCalificaciones.length);
-};
-
-/** Agrupa calificaciones por categoría para gráficos */
-export const agruparPorCategoria = (itemsConCalificaciones) => {
-  const resultado = {};
-  itemsConCalificaciones.forEach(item => {
-    const catNombre = item.item?.categoria?.nombre || 'Sin categoría';
-    if (!resultado[catNombre]) {
-      resultado[catNombre] = {
-        categoria: catNombre,
-        items: [],
-        promedio: 0
-      };
-    }
-    resultado[catNombre].items.push({
-      nombre: item.item.nombre,
-      calificacion: item.calificacion
-    });
-  });
-  
-  Object.keys(resultado).forEach(cat => {
-    const items = resultado[cat].items;
-    const suma = items.reduce((acc, i) => acc + i.calificacion, 0);
-    resultado[cat].promedio = Math.round(suma / items.length);
-  });
-  
-  return resultado;
-};
-
-// ─── Hook principal ───────────────────────────────────────────────────────────
-
-export function useAvances(currentUser) {
-  const [ciclos, setCiclos]           = useState([]);
-  const [loadingCiclos, setLoadingC]  = useState(true);
-  const [categoriasBase, setCategoriasBase] = useState([]);
-  const [mensajesPersonalizados, setMensajesPersonalizados] = useState([]);
-
-  const canEvaluar = ['SUPER_ADMIN', 'ADMINISTRATIVO', 'DIRECTOR', 'ENTRENADOR']
-    .includes(currentUser?.rol);
-
-  // ── Cargar datos maestros ──────────────────────────────────────────────────
-  const cargarDatosMaestros = useCallback(async () => {
-    const { data: cats } = await supabase
-      .from('categorias_base')
-      .select('*')
-      .order('orden');
-    if (cats) setCategoriasBase(cats);
-    
-    const { data: msgs } = await supabase
-      .from('mensajes_personalizados_club')
-      .select('*')
-      .eq('activo', true)
-      .order('rango_min');
-    if (msgs) setMensajesPersonalizados(msgs);
-  }, []);
-
-  useEffect(() => { cargarDatosMaestros(); }, [cargarDatosMaestros]);
-
-  // ── Ciclos ─────────────────────────────────────────────────────────────────
   const fetchCiclos = useCallback(async () => {
-    setLoadingC(true);
-    const { data, error } = await supabase
-      .from('ciclos_evaluacion')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!error) setCiclos(data || []);
-    setLoadingC(false);
-  }, []);
-
-  useEffect(() => { fetchCiclos(); }, [fetchCiclos]);
-
-  const crearCiclo = async (payload) => {
-    const { items, ...cicloData } = payload;
-    
-    const { data: ciclo, error: cicloError } = await supabase
-      .from('ciclos_evaluacion')
-      .insert([{ ...cicloData, creado_por: currentUser?.id, activo: true }])
-      .select()
-      .single();
-    if (cicloError) throw cicloError;
-    
-    if (items && items.length > 0) {
-      const itemsToInsert = items.map((item, idx) => ({
-        ciclo_id: ciclo.id,
-        categoria_id: item.categoria_id,
-        nombre: item.nombre,
-        orden: idx
-      }));
-      
-      const { error: itemsError } = await supabase
-        .from('ciclos_items')
-        .insert(itemsToInsert);
-      if (itemsError) throw itemsError;
+    setLoadingCiclos(true);
+    try {
+      const { data, error } = await supabase
+        .from('ciclos_avances')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setCiclos(data || []);
+    } catch (err) {
+      console.error('Error fetchCiclos:', err.message);
+    } finally {
+      setLoadingCiclos(false);
     }
-    
-    await registrarLog({
-      accion: 'CREAR_CICLO',
-      descripcion: `Ciclo creado: ${payload.nombre}`,
-      modulo: 'AVANCES',
-    });
-    await fetchCiclos();
-    return ciclo;
-  };
-
-  const toggleCiclo = async (id, activo) => {
-    const { error } = await supabase
-      .from('ciclos_evaluacion')
-      .update({ activo: !activo })
-      .eq('id', id);
-    if (error) throw error;
-    setCiclos(prev => prev.map(c => c.id === id ? { ...c, activo: !activo } : c));
-  };
-
-  const eliminarCiclo = async (id, nombre) => {
-    const { error } = await supabase.from('ciclos_evaluacion').delete().eq('id', id);
-    if (error) throw error;
-    await registrarLog({
-      accion: 'ELIMINAR_CICLO',
-      descripcion: `Ciclo eliminado: ${nombre}`,
-      modulo: 'AVANCES',
-    });
-    setCiclos(prev => prev.filter(c => c.id !== id));
-  };
-
-  // ── Evaluaciones ───────────────────────────────────────────────────────────
-  const fetchEvaluacionesAlumno = useCallback(async (alumnoId) => {
-    if (!alumnoId) return [];
-    
-    const { data, error } = await supabase
-      .from('evaluaciones_avance')
-      .select(`
-        *,
-        items:evaluaciones_items(
-          *,
-          item:ciclos_items(
-            *,
-            categoria:categorias_base(*)
-          )
-        ),
-        ciclo:ciclos_evaluacion(*)
-      `)
-      .eq('alumno_id', alumnoId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
   }, []);
 
-  const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
+  useEffect(() => {
+    fetchCiclos();
+  }, [fetchCiclos]);
+
+  /** * Obtiene items de un ciclo con CACHÉ para optimizar fluidez 
+   */
+  const getItemsConCategorias = useCallback(async (cicloId) => {
     if (!cicloId) return [];
-    
-    const { data, error } = await supabase
-      .from('evaluaciones_avance')
-      .select(`
-        *,
-        items:evaluaciones_items(
-          *,
-          item:ciclos_items(*)
-        ),
-        alumno:usuarios(id, primer_nombre, primer_apellido, categoria, foto_url)
-      `)
-      .eq('ciclo_id', cicloId);
-    
-    if (error) throw error;
-    return data || [];
+    if (cacheItems[cicloId]) return cacheItems[cicloId];
+
+    try {
+      const { data, error } = await supabase
+        .from('ciclos_items')
+        .select('*, categoria:categorias_base(*)')
+        .eq('ciclo_id', cicloId)
+        .order('orden');
+      
+      if (error) throw error;
+      cacheItems[cicloId] = data || [];
+      return cacheItems[cicloId];
+    } catch (err) {
+      console.error('Error getItemsConCategorias:', err.message);
+      return [];
+    }
   }, []);
 
-  const guardarEvaluacion = async (payload) => {
-    const { evaluacionData, itemsData } = payload;
-    
-    const { data: evaluacion, error: evalError } = await supabase
-      .from('evaluaciones_avance')
-      .upsert(
-        [{ 
-          ...evaluacionData, 
-          entrenador_id: currentUser?.id,
-          fecha_evaluacion: new Date().toISOString().split('T')[0]
-        }],
-        { onConflict: 'alumno_id,ciclo_id,tipo' }
-      )
-      .select()
-      .single();
-    if (evalError) throw evalError;
-    
-    await supabase
-      .from('evaluaciones_items')
-      .delete()
-      .eq('evaluacion_id', evaluacion.id);
-    
-    if (itemsData && itemsData.length > 0) {
-      const itemsToInsert = itemsData.map(item => ({
-        evaluacion_id: evaluacion.id,
-        ciclo_item_id: item.ciclo_item_id,
-        calificacion: item.calificacion
-      }));
-      
-      const { error: itemsError } = await supabase
-        .from('evaluaciones_items')
-        .insert(itemsToInsert);
-      if (itemsError) throw itemsError;
-    }
-    
-    await registrarLog({
-      accion: 'GUARDAR_EVALUACION',
-      descripcion: `Evaluación ${evaluacionData.tipo} guardada para alumno ${evaluacionData.alumno_id}`,
-      modulo: 'AVANCES',
-      detalles: { ciclo_id: evaluacionData.ciclo_id, tipo: evaluacionData.tipo },
+  /**
+   * Prepara datos para Radar Chart: Alumno (Inicial vs Final)
+   */
+  const prepararDatosComparativos = (itemsCiclo, evalInicial, evalFinal) => {
+    return itemsCiclo.map(item => {
+      const notaI = evalInicial?.items?.find(i => i.item_id === item.id)?.calificacion || 0;
+      const notaF = evalFinal?.items?.find(i => i.item_id === item.id)?.calificacion || 0;
+      return {
+        subject: item.nombre,
+        inicial: notaI,
+        final: notaF,
+        fullMark: 10,
+      };
     });
+  };
+
+  /**
+   * Prepara datos para Radar Chart: Versus entre dos alumnos
+   */
+  const prepararVersus = (itemsCiclo, evalAlumnoA, evalAlumnoB) => {
+    return itemsCiclo.map(item => ({
+      subject: item.nombre,
+      alumnoA: evalAlumnoA?.items?.find(i => i.item_id === item.id)?.calificacion || 0,
+      alumnoB: evalAlumnoB?.items?.find(i => i.item_id === item.id)?.calificacion || 0,
+      fullMark: 10,
+    }));
+  };
+
+  /**
+   * Lógica de guardado con validación de ciclo activo
+   */
+  const guardarEvaluacion = async (payload, cicloActivo) => {
+    if (!cicloActivo) throw new Error("No se pueden crear evaluaciones en un ciclo cerrado.");
     
-    return evaluacion;
+    const { data, error } = await supabase
+      .from('evaluaciones_procesos')
+      .upsert([payload])
+      .select();
+    
+    if (error) throw error;
+    return data;
   };
 
-  const obtenerMensajePorPromedio = (promedio) => {
-    const mensaje = mensajesPersonalizados.find(
-      m => promedio >= m.rango_min && promedio <= m.rango_max
-    );
-    return mensaje?.mensaje || 'Evaluación completada.';
-  };
+  // --- LOGICA DE OBSERVACIONES (Simplificada y fluida) ---
 
-  // ── Observaciones ────────────────────────────────────────────────────────────
-  const fetchObservaciones = useCallback(async (alumnoId) => {
+  const fetchObservaciones = async (alumnoId) => {
     const { data, error } = await supabase
       .from('observaciones_seguimiento')
       .select('*')
       .eq('alumno_id', alumnoId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
-  }, []);
+    return data;
+  };
 
-  const agregarObservacion = async ({ usuario_id, nota, categoria_nota }) => {
-    const nombreAutor = currentUser
-      ? `${currentUser.primer_nombre} ${currentUser.primer_apellido || ''}`.trim()
-      : 'Entrenador';
+  const agregarObservacion = async (alumno_id, nota, categoria_nota) => {
+    const nombreAutor = `${currentUser?.primer_nombre || ''} ${currentUser?.primer_apellido || ''}`.trim();
     const { data, error } = await supabase
       .from('observaciones_seguimiento')
       .insert([{
-        alumno_id:      usuario_id,
-        autor_id:       currentUser?.id,
-        autor_nombre:   nombreAutor,
+        alumno_id,
+        autor_id: currentUser?.id,
+        autor_nombre: nombreAutor || 'Entrenador',
         nota,
         categoria_nota,
       }])
-      .select()
-      .single();
+      .select().single();
     if (error) throw error;
     return data;
-  };
-
-  const editarObservacion = async (id, nota, categoria_nota) => {
-    const { data, error } = await supabase
-      .from('observaciones_seguimiento')
-      .update({ nota, categoria_nota })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  };
-
-  const eliminarObservacion = async (id) => {
-    const { error } = await supabase
-      .from('observaciones_seguimiento')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
   };
 
   return {
-    // datos maestros
-    categoriasBase,
-    mensajesPersonalizados,
-    // ciclos
-    ciclos, loadingCiclos, fetchCiclos,
-    crearCiclo, toggleCiclo, eliminarCiclo,
-    // items del ciclo
+    ciclos, 
+    loadingCiclos, 
+    fetchCiclos,
     getItemsConCategorias,
-    // evaluaciones
-    fetchEvaluacionesAlumno, fetchEvaluacionesCiclo, guardarEvaluacion,
-    obtenerMensajePorPromedio,
-    // utilidades
-    calcularPromedioEvaluacion,
-    agruparPorCategoria,
-    // observaciones
-    fetchObservaciones, agregarObservacion, editarObservacion, eliminarObservacion,
-    // permisos
-    canEvaluar,
+    prepararDatosComparativos,
+    prepararVersus,
+    guardarEvaluacion,
+    fetchObservaciones,
+    agregarObservacion,
+    canEvaluar: ['SUPER_ADMIN', 'DIRECTOR', 'ENTRENADOR'].includes(currentUser?.rol),
+    categoriasBase: [
+      { id: 'tecnica', nombre: 'Técnica', icono: 'sports_soccer' },
+      { id: 'fisica', nombre: 'Física', icono: 'fitness_center' },
+      { id: 'tactica', nombre: 'Táctica', icono: 'strategy' },
+      { id: 'psicologica', nombre: 'Psicológica', icono: 'psychology' }
+    ]
   };
-}
+};
