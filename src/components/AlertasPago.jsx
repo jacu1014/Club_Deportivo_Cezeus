@@ -299,17 +299,20 @@ function FilaAlumno({ alumno }) {
           {alumno.primer_nombre} {alumno.primer_apellido}
         </p>
         
-        <div className="flex flex-col gap-0.5 mt-1">
+        <div className="flex flex-col gap-1 mt-1.5">
           <p className="text-[7px] sm:text-[8px] text-slate-600 font-bold uppercase tracking-widest leading-none">
             {alumno.categoria} <span className="hidden xs:inline">· Corte: {fechaCorte ? getDate(fechaCorte) : '—'}</span>
           </p>
           
-          {/* Nueva línea: Último pago visible en móvil */}
-          <p className="text-[7px] sm:text-[8px] md:hidden text-slate-500 font-medium uppercase leading-none">
-            Ultimo Pago: {ultimoPago 
-              ? format(new Date(ultimoPago.fecha_pago), "d MMM", { locale: es }) 
-              : 'Sin registros'}
-          </p>
+          {/* Fecha de pago resaltada en móvil */}
+          <div className="md:hidden flex items-center gap-1">
+            <span className="material-symbols-outlined text-[10px] text-sky-400/50">history</span>
+            <p className="text-[7px] text-sky-400/80 font-black uppercase tracking-tighter leading-none">
+              Último pago: {ultimoPago 
+                ? format(new Date(ultimoPago.fecha_pago), "d MMM", { locale: es }) 
+                : 'Sin registros'}
+            </p>
+          </div>
         </div>
       </div>
 
