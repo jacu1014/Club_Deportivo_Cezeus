@@ -29,23 +29,28 @@ const Nosotros = () => {
       {/* PIE DE PÁGINA INSTITUCIONAL */}
       <div className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 rounded-[3rem] p-12 text-center">
         <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-8 italic">Valores Fundamentales</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {[
-            { lab: 'Sentido Humano', icon: 'favorite' },
-            { lab: 'Disciplina', icon: 'sports_soccer' },
-            { lab: 'Principios', icon: 'verified_user' },
-            { lab: 'Cuidado por la vida', icon: 'eco' }
-          ].map((v, i) => (
-            <div key={i} className="flex flex-col items-center gap-4 group">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-black transition-all duration-300">
-                <span className="material-symbols-outlined text-2xl">{v.icon}</span>
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-white transition-colors">
-                {v.lab}
-              </span>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+        {[
+          { lab: 'Respeto', icon: 'handshake' },
+          { lab: 'Disciplina', icon: 'fitness_center' },
+          { lab: 'Compromiso', icon: 'verified' },
+          { lab: 'Compañerismo', icon: 'groups' },
+          { lab: 'Constancia', icon: 'history' },
+          { lab: 'Responsabilidad', icon: 'assignment_turned_in' },
+          { lab: 'Trabajo en equipo', icon: 'sports_soccer' },
+          { lab: 'Superación', icon: 'trending_up' },
+          { lab: 'Salud y bienestar', icon: 'monitor_heart' }
+        ].map((v, i) => (
+          <div key={i} className="flex flex-col items-center gap-4 group">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-black transition-all duration-300">
+              <span className="material-symbols-outlined text-2xl">{v.icon}</span>
             </div>
-          ))}
-        </div>
+            <span className="text-[10px] text-center font-black text-slate-400 uppercase tracking-widest group-hover:text-white transition-colors">
+              {v.lab}
+            </span>
+          </div>
+        ))}
+      </div>
       </div>
     </div>
   );

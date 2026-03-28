@@ -1,10 +1,15 @@
 // src/pages/landing/components/ValoresSection.jsx
 
 const VALORES = [
-  { icon: '🤝', title: 'Respeto',          desc: 'Tratamos a cada estudiante y familia con dignidad. El respeto es la base de nuestra comunidad.' },
-  { icon: '⭐', title: 'Disciplina',        desc: 'La constancia y el esfuerzo diario son los pilares del crecimiento deportivo y personal.' },
-  { icon: '👥', title: 'Trabajo en equipo', desc: 'Los logros colectivos superan los individuales. Juntos somos más fuertes dentro y fuera de la cancha.' },
-  { icon: '💪', title: 'Superación',        desc: 'Cada reto es una oportunidad para ser mejores personas y mejores deportistas.' },
+  { icon: '🤝', title: 'Respeto', desc: 'Tratamos a cada integrante con dignidad; es la base de nuestra comunidad deportiva.' },
+  { icon: '⭐', title: 'Disciplina', desc: 'El esfuerzo diario y el orden son los pilares de nuestro crecimiento personal.' },
+  { icon: '💍', title: 'Compromiso', desc: 'Damos lo mejor de nosotros en cada entrenamiento y competencia.' },
+  { icon: '👥', title: 'Compañerismo', desc: 'Apoyamos al otro en la victoria y en la derrota, creando lazos reales.' },
+  { icon: '⏳', title: 'Constancia', desc: 'La perseverancia es lo que transforma el talento en resultados reales.' },
+  { icon: '✅', title: 'Responsabilidad', desc: 'Cumplimos con nuestros deberes y cuidamos nuestro entorno deportivo.' },
+  { icon: '⚽', title: 'Trabajo en equipo', desc: 'Juntos somos más fuertes; los logros colectivos superan cualquier individualidad.' },
+  { icon: '🚀', title: 'Superación personal', desc: 'Buscamos ser mejores que ayer, superando nuestros propios límites.' },
+  { icon: '❤️', title: 'Salud y bienestar', desc: 'Promovemos hábitos de vida saludables y el equilibrio físico y mental.' }
 ];
 
 export default function ValoresSection() {
