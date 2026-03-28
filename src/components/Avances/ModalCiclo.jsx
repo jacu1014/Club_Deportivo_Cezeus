@@ -5,8 +5,13 @@ import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAvances } from '../../hooks/useAvances';
 
-// Lista de categorías de alumnos (puedes mover esto a un config o traerlo de BD)
-const CATEGORIAS_ALUMNOS = ['INICIACION', 'INFANTIL', 'TRANSICION', 'JUVENIL'];
+// Categorías exactas sincronizadas con la base de datos y data.ts
+const CATEGORIAS_ALUMNOS = [
+  'Iniciación (5-7 años)',
+  'Infantil (8-10 años)',
+  'Transición (11-13 años)',
+  'Categoría Superior (14+)'
+];
 
 export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
   const { categoriasBase } = useAvances(currentUser);
@@ -22,10 +27,9 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     fecha_inicio: hoy,
     fecha_fin: '',
     activo: true,
-    categorias_objetivo: [], // Aquí guardamos Iniciación, Infantil, etc.
+    categorias_objetivo: [], // Soporta multiselección
   });
   
-  // Pilares técnicos: [{ id: 'tecnica', items: ['Pase', 'Control'] }, ...]
   const [pilaresTecnicos, setPilaresTecnicos] = useState([]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -45,6 +49,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     setPilaresTecnicos(prev => {
       const existe = prev.find(c => c.id === cat.id);
       if (existe) return prev.filter(c => c.id !== cat.id);
+      // Al activar un pilar, se inicializa con un item vacío
       return [...prev, { ...cat, items: [''] }]; 
     });
   };
@@ -76,7 +81,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
     e.preventDefault();
     if (paso === 1) {
       if (!form.nombre || form.categorias_objetivo.length === 0 || pilaresTecnicos.length === 0) {
-        return setError('Faltan datos: Nombre, Categorías de alumnos y Pilares técnicos son obligatorios');
+        return setError('Faltan datos: Nombre, Categorías y Pilares son obligatorios');
       }
       setError('');
       setPaso(2);
@@ -91,7 +96,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
         p_inicio: form.fecha_inicio,
         p_fin: form.fecha_fin,
         p_creador: currentUser.id,
-        p_cats_alumnos: form.categorias_objetivo, // Enviamos el array de categorías (Iniciación, etc)
+        p_cats_alumnos: form.categorias_objetivo, 
         p_estructura_tecnica: pilaresTecnicos.map(c => ({
           id: c.id,
           items: c.items.filter(i => i.trim() !== '')
@@ -118,7 +123,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
             <div>
               <h2 className="text-white font-black italic uppercase text-2xl tracking-tighter">Configurar Ciclo</h2>
               <p className="text-slate-500 text-[9px] font-black uppercase tracking-[0.2em] mt-1">
-                Paso {paso} de 2: {paso === 1 ? 'Alcance y Pilares' : 'Definición de Items'}
+                Paso {paso} de 2: {paso === 1 ? 'Alcance y Categorías' : 'Definición de Items'}
               </p>
             </div>
             <button type="button" onClick={onClose} className="text-slate-700 hover:text-white transition-colors">
@@ -128,38 +133,39 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
 
           {paso === 1 ? (
             <div className="space-y-6">
-              <Field label="Identificación" hint="Nombre público del periodo">
-                <input type="text" value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Fase Competitiva 2026" className={INPUT} required />
+              <Field label="Identificación" hint="Nombre del periodo evaluativo">
+                <input type="text" value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Macrociclo de Apertura 2026" className={INPUT} required />
               </Field>
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Inicio">
                   <input type="date" value={form.fecha_inicio} onChange={e => set('fecha_inicio', e.target.value)} className={INPUT} />
                 </Field>
-                <Field label="Cierre Estimado">
+                <Field label="Cierre">
                   <input type="date" value={form.fecha_fin} onChange={e => set('fecha_fin', e.target.value)} className={INPUT} />
                 </Field>
               </div>
 
-              {/* NUEVO: Selección de Categorías de Alumnos */}
-              <Field label="Categorías de Alumnos" hint="¿A quiénes se evaluará?">
+              <Field label="Categorías de Alumnos" hint="Puedes seleccionar varias categorías mixtas">
                 <div className="flex flex-wrap gap-2">
                   {CATEGORIAS_ALUMNOS.map(cat => (
                     <button key={cat} type="button" onClick={() => toggleCatObjetivo(cat)}
                       className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all border ${
-                        form.categorias_objetivo.includes(cat) ? 'bg-emerald-500 text-black border-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-slate-500 border-white/10'
+                        form.categorias_objetivo.includes(cat) 
+                          ? 'bg-emerald-500 text-black border-emerald-500 shadow-lg shadow-emerald-500/20' 
+                          : 'bg-white/5 text-slate-500 border-white/10 hover:border-white/30'
                       }`}>
                       {cat}
                     </button>
                   ))}
                   <button type="button" onClick={() => set('categorias_objetivo', [...CATEGORIAS_ALUMNOS])}
                     className="px-4 py-2 rounded-xl text-[9px] font-black uppercase bg-white/5 text-white border border-white/10 hover:bg-white/10">
-                    Todos
+                    Todas
                   </button>
                 </div>
               </Field>
 
-              <Field label="Pilares Técnicos (Radar)" hint="Dimensiones de evaluación">
+              <Field label="Pilares Técnicos (Radar)" hint="Dimensiones que se graficarán">
                 <div className="flex flex-wrap gap-2">
                   {categoriasBase.map(cat => {
                     const sel = pilaresTecnicos.find(c => c.id === cat.id);
@@ -177,7 +183,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
               </Field>
             </div>
           ) : (
-            <div className="space-y-6 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
+            <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {pilaresTecnicos.map(cat => (
                 <div key={cat.id} className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-6 space-y-4">
                   <div className="flex justify-between items-center px-2">
@@ -193,7 +199,7 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
                     {cat.items.map((item, idx) => (
                       <div key={idx} className="flex gap-2 group">
                         <input type="text" value={item} onChange={e => handleItemChange(cat.id, idx, e.target.value)} 
-                          placeholder={`Item de ${cat.nombre}...`} className={INPUT} />
+                          placeholder={`Ej: ${cat.nombre === 'Técnica' ? 'Control de balón' : 'Puntualidad'}...`} className={INPUT} />
                         <button type="button" onClick={() => removeItem(cat.id, idx)} className="p-3 text-slate-600 hover:text-rose-500 transition-colors">
                           <span className="material-symbols-outlined text-sm">delete</span>
                         </button>
