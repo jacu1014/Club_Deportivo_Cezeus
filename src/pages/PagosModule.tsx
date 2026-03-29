@@ -229,14 +229,16 @@ const PagosModule = ({ user }: PagosModuleProps) => {
         )}
       </div>
 
-      {/* SECCIÓN UNIFICADA DE ESTADO (SOLO PARA ALUMNOS) */}
+      {/* SECCIÓN DE ESTADO DE CUENTA (CORREGIDA) */}
       {userRol === 'ALUMNO' && !loading && (
-        <div className="mb-6 space-y-4">
-          {/* 1. Siempre intentamos mostrar la Alerta si existe (deuda/mora) */}
-          <AlertasPago currentUser={user} />
-
-          {/* 2. Si NO hay registros 'PENDIENTE', mostramos el mensaje "Al Día" */}
-          {!datos.some(pago => pago.estado_pago === 'PENDIENTE') && (
+        <div className="mb-6">
+          {/* Lógica: 
+            Si existe AL MENOS UN pago con estado 'PENDIENTE', dejamos que AlertasPago gestione los mensajes.
+            Si NO hay nada pendiente, mostramos únicamente nuestro banner de "Al Día".
+          */}
+          {datos.some(pago => pago.estado_pago === 'PENDIENTE') ? (
+            <AlertasPago currentUser={user} />
+          ) : (
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-4 animate-in fade-in slide-in-from-top duration-500">
               <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-emerald-400">verified</span>
