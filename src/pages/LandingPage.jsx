@@ -8,6 +8,7 @@ import LandingNav        from '../components/Landing/LandingNav';
 import HeroSection       from '../components/Landing/HeroSection';
 import HistoriaSection   from '../components/Landing/HistoriaSection';
 import CategoriasSection from '../components/Landing/CategoriasSection';
+import MetodologiaSection from '../components/Landing/MetodologiaSection';
 import GaleriaSection    from '../components/Landing/GaleriaSection';
 import ProgramaSection   from '../components/Landing/ProgramaSection';
 import ValoresSection    from '../components/Landing/ValoresSection';
@@ -26,6 +27,7 @@ export default function LandingPage() {
       hero:       'Club Deportivo Cezeus | Escuela de Fútbol para Niños en Bogotá',
       historia:   'Nuestra Historia | Club Deportivo Cezeus',
       categorias: 'Categorías por Edades | Club Deportivo Cezeus',
+      metodologia: 'Metodología y Tecnología | Club Deportivo Cezeus',
       galeria:    'Galería | Club Deportivo Cezeus',
       programa:   'Horarios y Costos | Club Deportivo Cezeus',
       contacto:   'Inscríbete | Club Deportivo Cezeus',
@@ -68,6 +70,8 @@ export default function LandingPage() {
 
         {/* H2: Categorías por Edad */}
         <CategoriasSection />
+        {/* H2: Metodologia de trabajo */}
+        <MetodologiaSection />
 
         {/* Galería — contenido visual */}
         <GaleriaSection fotos={fotos} loading={loading} />
