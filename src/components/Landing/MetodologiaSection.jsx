@@ -1,87 +1,100 @@
+// src/pages/landing/components/MetodologiaSection.jsx
 import React from 'react';
+import {
+  RadarChart, PolarGrid, PolarAngleAxis, Radar,
+  ResponsiveContainer, Legend, Tooltip
+} from 'recharts';
 
-// Iconos optimizados para el lenguaje del proyecto (Evaluación, Radar y Asistencia)
-const RadarIcon = () => (
+// Iconos SVG personalizados Cezeus (Estilo trazos limpios)
+const DataAnalyticsIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m9-9H3m15.364-6.364l-12.728 12.728m12.728 0L5.636 5.636" />
-    <circle cx="12" cy="12" r="9" strokeOpacity="0.2" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
   </svg>
 );
 
-const AttendanceIcon = () => (
+const PlatformIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3M12 18.75h.008v.008H12v-.008Z" />
   </svg>
 );
 
-const HistoryIcon = () => (
+const CareerIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18c-2.305 0-4.408.867-6 2.292m0-14.25v14.25" />
   </svg>
 );
+
+// Datos Estáticos para el Radar "Tipo FIFA"
+const radarData = [
+  { subject: 'Técnica', A: 85, fullMark: 100 },
+  { subject: 'Táctica', A: 70, fullMark: 100 },
+  { subject: 'Físico', A: 90, fullMark: 100 },
+  { subject: 'Mente', A: 78, fullMark: 100 },
+  { subject: 'Disciplina', A: 95, fullMark: 100 },
+  { subject: 'Liderazgo', A: 65, fullMark: 100 },
+];
 
 const MetodologiaSection = () => {
   return (
     <section id="metodologia" className="py-24 bg-[#05080d] relative overflow-hidden">
-      {/* Decoración de fondo coherente con el Dashboard */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] -z-10"></div>
+      {/* Elemento decorativo de fondo */}
+      <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[150px] -z-10"></div>
       
-      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-6 lg:px-8">
         
-        {/* Encabezado con la tipografía y estilo de AvancesPage */}
+        {/* Encabezado con la tipografía Cezeus */}
         <div className="mb-20">
-          <div className="flex items-center gap-3 mb-4 justify-center md:justify-start">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(0,240,255,0.5)]"></span>
-            <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em] italic">Evolución Deportiva Inteligente</p>
-          </div>
-          <h2 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter italic leading-none text-center md:text-left">
-            ADN <span className="text-primary">Cezeus</span>
+          <p className="flex items-center gap-3 text-primary text-[11px] font-black uppercase tracking-[0.25em] mb-3 justify-center md:justify-start">
+            <span className="w-6 h-0.5 bg-primary inline-block" /> Innovación Deportiva
+          </p>
+          <h2 className="font-black italic text-[clamp(40px,5vw,64px)] leading-none text-white text-center md:text-left">
+            METODOLOGÍA <span className="text-primary">CEZEUS</span>
           </h2>
-          <div className="mt-6 h-1 w-24 bg-primary rounded-full mx-auto md:mx-0 shadow-[0_0_15px_rgba(0,240,255,0.3)]"></div>
+          <div className="mt-6 h-1 w-24 bg-primary rounded-full mx-auto md:mx-0 shadow-[0_0_15px_#13ecec]"></div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
           
-          {/* Columna de Funcionalidades Reales */}
+          {/* Columna de Beneficios Actualizados */}
           <div className="lg:col-span-7 space-y-6">
             
-            <div className="group p-8 bg-white/[0.02] border border-white/5 rounded-[2.5rem] hover:border-primary/20 hover:bg-white/[0.04] transition-all duration-500">
+            <div className="group p-8 bg-[#0E1620] border border-white/6 rounded-[2.5rem] hover:border-primary/25 hover:bg-black/20 transition-all duration-500">
               <div className="flex items-start gap-6">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(0,240,255,0.1)] transition-all">
-                  <RadarIcon />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(19,236,236,0.1)] transition-all">
+                  <DataAnalyticsIcon />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Ciclos de Evaluación</h3>
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Data en Tiempo Real</h3>
                   <p className="text-slate-500 text-[13px] font-bold leading-relaxed uppercase tracking-wide">
-                    Medimos el progreso mediante gráficos de radar dinámicos. Evaluamos pilares técnicos, físicos y tácticos con comparativas entre el estado inicial y final de cada ciclo.
+                    Registramos métricas de cada entrenamiento y partido para optimizar el rendimiento técnico y físico de forma instantánea.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="group p-8 bg-white/[0.02] border border-white/5 rounded-[2.5rem] hover:border-primary/20 hover:bg-white/[0.04] transition-all duration-500">
+            <div className="group p-8 bg-[#0E1620] border border-white/6 rounded-[2.5rem] hover:border-primary/25 hover:bg-black/20 transition-all duration-500">
               <div className="flex items-start gap-6">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-all">
-                  <AttendanceIcon />
+                  <PlatformIcon />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Control de Asistencia Digital</h3>
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Ecosistema Digital</h3>
                   <p className="text-slate-500 text-[13px] font-bold leading-relaxed uppercase tracking-wide">
-                    Gestión en tiempo real de la presencia en cancha. Sincronización inmediata con el perfil del alumno y alertas de inactividad para un seguimiento riguroso.
+                    Gestión total del club en la palma de tu mano. Carnets digitales, asistencia automatizada y reportes inmediatos.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="group p-8 bg-white/[0.02] border border-white/5 rounded-[2.5rem] hover:border-primary/20 hover:bg-white/[0.04] transition-all duration-500">
+            <div className="group p-8 bg-[#0E1620] border border-white/6 rounded-[2.5rem] hover:border-primary/25 hover:bg-black/20 transition-all duration-500">
               <div className="flex items-start gap-6">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-all">
-                  <HistoryIcon />
+                  <CareerIcon />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Bitácora de Seguimiento</h3>
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tight mb-2 group-hover:text-primary transition-colors">Seguimiento de Carrera</h3>
                   <p className="text-slate-500 text-[13px] font-bold leading-relaxed uppercase tracking-wide">
-                    Historial permanente de observaciones de los entrenadores. Cada avance técnico queda registrado en una línea de tiempo accesible para el cuerpo técnico.
+                    Generamos un historial técnico permanente que proyecta y documenta el futuro profesional del deportista.
                   </p>
                 </div>
               </div>
@@ -89,25 +102,40 @@ const MetodologiaSection = () => {
 
           </div>
 
-          {/* Columna Visual: Mockup que representa el "Radar" que tanto hemos trabajado */}
-          <div className="lg:col-span-5 relative group">
+          {/* Columna Visual — Mockup Radar "Tipo FIFA" Estático */}
+          <div className="lg:col-span-5 relative group h-[450px]">
             <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-transparent rounded-[3rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
             
-            <div className="relative bg-[#0a1118] border border-white/10 p-4 rounded-[3rem] shadow-2xl backdrop-blur-xl">
-              <div className="rounded-[2rem] overflow-hidden border border-white/5 bg-[#05080d] aspect-[4/5] flex items-center justify-center relative">
-                {/* Aquí iría el screenshot de la sección SeguimientoAlumno.jsx */}
-                <div className="absolute inset-0 bg-[url('/assets/img/radar-mockup.png')] bg-cover bg-center opacity-60 group-hover:opacity-90 transition-opacity"></div>
-                
-                {/* Elemento gráfico representativo del Radar si no hay imagen */}
-                <div className="relative z-10 w-48 h-48 border border-primary/20 rounded-full flex items-center justify-center animate-spin-slow">
-                  <div className="w-full h-[1px] bg-primary/40 absolute rotate-45"></div>
-                  <div className="w-full h-[1px] bg-primary/40 absolute -rotate-45"></div>
-                  <div className="w-32 h-32 border border-primary/40 rounded-full"></div>
-                </div>
+            <div className="relative h-full bg-[#0a1118] border border-white/10 rounded-[3rem] shadow-2xl backdrop-blur-xl flex items-center justify-center p-8">
+              <div className="absolute top-8 left-8">
+                <p className="text-white/20 font-black uppercase text-[10px] tracking-[0.4em] italic">Perfil Cezeus 24/25</p>
               </div>
               
-              <div className="absolute -bottom-6 -right-6 bg-primary text-black px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/20 italic transform rotate-3">
-                Tracking 24/7
+              <ResponsiveContainer width="100%" height="90%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                  <PolarGrid stroke="#ffffff15" />
+                  <PolarAngleAxis 
+                    dataKey="subject" 
+                    tick={{ fill: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: '0.05em' }} 
+                  />
+                  <Radar 
+                    name="Performance" 
+                    dataKey="A" 
+                    stroke="#13ecec" 
+                    fill="#13ecec" 
+                    fillOpacity={0.1} 
+                    strokeWidth={2}
+                  />
+                  {/* Tooltip personalizado estático */}
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', fontSize: '10px' }}
+                    itemStyle={{ color: '#fff', fontWeight: '900', textTransform: 'uppercase' }}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+              
+              <div className="absolute -bottom-6 -left-6 bg-primary text-black px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/20 italic transform -rotate-3">
+                Tracking Dinámico 24/7
               </div>
             </div>
           </div>
