@@ -6,6 +6,7 @@ import FinanceTable from '../components/FinanceTable';
 import ModalNuevoPago from '../components/ModalNuevoPago';
 import { usePageLog } from '../hooks/usePageLog';
 import { registrarLog } from '../lib/activity';
+import AlertasPago from '../components/AlertasPago'; 
 
 // MEJORA: interfaces definidas, sin 'any'
 interface Usuario {
@@ -228,6 +229,11 @@ const PagosModule = ({ user }: PagosModuleProps) => {
         )}
       </div>
 
+      {userRol === 'ALUMNO' && (
+        <div className="mb-2">
+          <AlertasPago currentUser={user} />
+        </div>
+      )}
       {!loading && datosFiltrados.length > 0 ? (
         <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
       ) : !loading && (

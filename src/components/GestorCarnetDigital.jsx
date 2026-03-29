@@ -34,29 +34,49 @@ const GestorCarnetDigital = ({ user, alumnoPreseleccionado }) => {
     fetchAlumnos();
   }, []);
 
-  const fetchAlumnos = async () => {
-    // Usando el nombre de tabla: usuarios
-    let query = supabase
-      .from('usuarios') 
-      .select('id, rol, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, email, foto_url, telefono, estado, categoria, fecha_nacimiento, fecha_inscripcion, tipo_documento, numero_documento, genero, direccion, eps, grupo_sanguineo, factor_rh, condiciones_medicas, acudiente_primer_nombre, acudiente_segundo_nombre, acudiente_primer_apellido, acudiente_segundo_apellido, acudiente_parentesco, acudiente_telefono')
-      .eq('rol', 'ALUMNO') 
-      .order('primer_apellido');
+  // Ubica la función fetchAlumnos dentro de GestorCarnetDigital.jsx (aprox. línea 37)
+const fetchAlumnos = async () => {
+  let query = supabase
+    .from('usuarios')
+    .select('*')
+    .neq('rol', 'SUPER_ADMIN') // Opcional: filtrar según tu lógica
+    .order('primer_nombre', { ascending: true });
 
-    if (isAlumno) query = query.eq('email', user.email);
-    
-    const { data } = await query;
-    if (data) {
-      setAlumnos(data);
-      if (isAlumno) setSeleccionado(data[0]);
-      
-      if (alumnoPreseleccionado) {
-         const encontrado = data.find(a => a.id === alumnoPreseleccionado.id);
-         if (encontrado) setSeleccionado(encontrado);
-      } else if (!isAlumno && data.length > 0 && !seleccionado) {
-          setSeleccionado(data[0]);
+  if (isAlumno) {
+    query = query.eq('id', user.id);
+  } else if (filtroCategoria !== 'TODOS') {
+    query = query.eq('categoria', filtroCategoria);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error al cargar alumnos:", error);
+    return;
+  }
+
+  if (data) {
+    setAlumnos(data);
+
+    // LÓGICA CORREGIDA PARA EVITAR EL "PARPADEO"
+    if (alumnoPreseleccionado) {
+      // Prioridad 1: Si venimos de otra página con un alumno ya elegido
+      const encontrado = data.find(a => a.id === alumnoPreseleccionado.id);
+      if (encontrado) {
+        setSeleccionado(encontrado);
+      } else {
+        // Fallback: si no lo encuentra en la lista actual, usamos el preseleccionado tal cual
+        setSeleccionado(alumnoPreseleccionado);
       }
+    } else if (isAlumno && data.length > 0) {
+      // Prioridad 2: Si es un alumno viendo su propio perfil
+      setSeleccionado(data[0]);
+    } else if (!seleccionado && data.length > 0) {
+      // Prioridad 3: Si es admin y no hay nada seleccionado, tomamos el primero
+      setSeleccionado(data[0]);
     }
-  };
+  }
+};
 
   // --- LÓGICA DE SELECCIÓN MÚLTIPLE ---
   const toggleSeleccionarTodo = () => {
