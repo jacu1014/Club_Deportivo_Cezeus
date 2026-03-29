@@ -8,6 +8,13 @@ import {
   ResponsiveContainer, Tooltip 
 } from 'recharts';
 
+// Helper de módulo: calcula promedio desde evaluaciones_items (promedio no existe como columna)
+const calcularPromedio = (ev) => {
+  if (!ev?.evaluaciones_items?.length) return 0;
+  const suma = ev.evaluaciones_items.reduce((acc, i) => acc + (i.calificacion ?? 0), 0);
+  return suma / ev.evaluaciones_items.length;
+};
+
 export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }) {
   const { 
     getItemsConCategorias,
@@ -46,14 +53,14 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
   const stats = useMemo(() => {
     if (!evaluaciones.length) return { promedio: "0.0", total: 0, progreso: 0 };
     
-    const promedioGral = evaluaciones.reduce((acc, curr) => acc + (curr.promedio || 0), 0) / evaluaciones.length;
+    const promedioGral = evaluaciones.reduce((acc, curr) => acc + calcularPromedio(curr), 0) / evaluaciones.length;
     const alumnosIds = [...new Set(evaluaciones.map(e => e.alumno_id))];
     
     let mejorados = 0;
     alumnosIds.forEach(id => {
       const evalsAl = evaluaciones.filter(e => e.alumno_id === id);
-      const inicial = evalsAl.find(e => e.tipo === 'INICIAL')?.promedio || 0;
-      const final = evalsAl.find(e => e.tipo === 'FINAL')?.promedio || 0;
+      const inicial = calcularPromedio(evalsAl.find(e => e.tipo === 'INICIAL'));
+      const final   = calcularPromedio(evalsAl.find(e => e.tipo === 'FINAL'));
       if (final > inicial && inicial > 0) mejorados++;
     });
 
@@ -67,10 +74,9 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
   // 3. Datos Radar (Promedio Grupal por Item)
   const datosRadarGrupo = useMemo(() => {
     return itemsCiclo.map(itemConfig => {
-      // Buscamos todas las calificaciones de este item específico en todas las evaluaciones
       const calificaciones = evaluaciones
-        .flatMap(e => e.items || []) // Aplanamos los detalles de cada evaluación
-        .filter(i => i.item_id === itemConfig.id)
+        .flatMap(e => e.evaluaciones_items || [])
+        .filter(i => i.ciclo_item_id === itemConfig.id)
         .map(i => i.calificacion);
       
       const promedioItem = calificaciones.length 
@@ -104,7 +110,7 @@ export default function ResumenCiclo({ ciclo, currentUser, onVolver, onEvaluar }
 
     const matrix = dataFiltrada.map(({ evaluacion }) => {
       return itemsCiclo.map(itemConfig => {
-        const detalle = evaluacion.items?.find(i => i.item_id === itemConfig.id);
+        const detalle = evaluacion.evaluaciones_items?.find(i => i.ciclo_item_id === itemConfig.id);
         const cal = detalle ? detalle.calificacion : 0;
         
         let color = 'bg-rose-500/20 text-rose-500'; 
@@ -264,7 +270,7 @@ function AlumnoRow({ evaluacion, onEvaluar, canEvaluar }) {
       </div>
       <div className="flex items-center gap-6">
         <div className="text-right">
-          <p className="text-primary font-black italic text-xl leading-none">{evaluacion.promedio?.toFixed(1)}</p>
+          <p className="text-primary font-black italic text-xl leading-none">{calcularPromedio(evaluacion).toFixed(1)}</p>
           <p className="text-slate-600 text-[7px] font-black uppercase mt-1">Nota Gral</p>
         </div>
         {canEvaluar && (
