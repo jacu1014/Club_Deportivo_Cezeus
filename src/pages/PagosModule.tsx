@@ -229,11 +229,29 @@ const PagosModule = ({ user }: PagosModuleProps) => {
         )}
       </div>
 
-      {userRol === 'ALUMNO' && (
-        <div className="mb-2">
+      {/* SECCIÓN UNIFICADA DE ESTADO (SOLO PARA ALUMNOS) */}
+      {userRol === 'ALUMNO' && !loading && (
+        <div className="mb-6 space-y-4">
+          {/* 1. Siempre intentamos mostrar la Alerta si existe (deuda/mora) */}
           <AlertasPago currentUser={user} />
+
+          {/* 2. Si NO hay registros 'PENDIENTE', mostramos el mensaje "Al Día" */}
+          {!datos.some(pago => pago.estado_pago === 'PENDIENTE') && (
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-4 animate-in fade-in slide-in-from-top duration-500">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-emerald-400">verified</span>
+              </div>
+              <div>
+                <h3 className="text-emerald-400 font-black text-[10px] uppercase tracking-[0.2em]">Estatus de Cuenta</h3>
+                <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider leading-relaxed">
+                  Te encuentras al día con tus obligaciones. ¡Gracias por tu puntualidad!
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
       {!loading && datosFiltrados.length > 0 ? (
         <FinanceDashboard datos={datosFiltrados} userRol={userRol} busqueda={filtros.busqueda} />
       ) : !loading && (
