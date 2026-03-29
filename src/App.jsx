@@ -192,13 +192,19 @@ function App() {
       console.log(`Auth event: ${event}`, session ? 'with session' : 'no session');
       
       if (event === 'INITIAL_SESSION') {
-        // INITIAL_SESSION solo para detectar el evento inicial
-        // pero no limpiar nada aún (dejar que los otros eventos lo hagan)
+        // Este evento dispara cuando Supabase termina de restaurar la sesión
         if (session && isMounted) {
-          // Hay sesión, refrescar inmediatamente
+          // Hay sesión guardada, cargarla
+          console.log('📦 Sesión encontrada en INITIAL_SESSION');
           await updateUserData(session, true);
+        } else if (isMounted) {
+          // No hay sesión, mostrar login
+          console.log('🔓 Sin sesión, mostrando login');
+          setUser(null);
+          clearProfile();
+          setLoading(false);
+          setLegalText('');
         }
-        // Si no hay sesión, esperar a SIGNED_OUT
         return;
       }
       
