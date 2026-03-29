@@ -18,27 +18,38 @@ import { es } from 'date-fns/locale';
 const calcularEstadoPago = (alumno, pagosMap) => {
   if (!alumno.fecha_inscripcion) return null;
 
-  const hoy         = startOfDay(new Date());
-  const diaCorte    = getDate(parseISO(alumno.fecha_inscripcion)); // ej: 15
-  // Fecha de corte del mes actual: mismo día pero en el mes de hoy
-  const fechaCorte  = startOfDay(setDate(new Date(), diaCorte));
+  const hoy = startOfDay(new Date());
+  const fInscripcionOriginal = parseISO(alumno.fecha_inscripcion);
+  const diaCorte = getDate(fInscripcionOriginal);
 
-  // Si aún no llegó el día de corte este mes, no hay deuda
-  if (!isAfter(hoy, fechaCorte) && hoy.getTime() !== fechaCorte.getTime()) {
-    return { estado: 'AL_DIA', fechaCorte };
-  }
+  // Generamos la fecha de corte de ESTE mes
+  let fechaCorteActual = setDate(new Date(), diaCorte);
+  fechaCorteActual = startOfDay(fechaCorteActual);
 
-  // Buscar pagos del alumno desde la fecha de corte
+  // Si hoy aún no es el día de corte, su deuda técnica es del mes pasado.
+  // Pero para simplificar: ¿Tiene un pago en los últimos 30 días desde su último día de corte?
   const pagosAlumno = pagosMap[alumno.id] || [];
-  const tienePago   = pagosAlumno.some(p => {
-    const fechaPago = startOfDay(new Date(p.fecha_pago));
-    return !isAfter(fechaCorte, fechaPago); // fecha_pago >= fechaCorte
+  
+  // Buscamos si hay un pago cuya fecha_pago sea >= fechaCorteActual
+  // O, si aún no llegamos al corte de este mes, >= fecha de corte del mes anterior.
+  const periodoValido = isAfter(hoy, fechaCorteActual) || hoy.getTime() === fechaCorteActual.getTime()
+    ? fechaCorteActual 
+    : startOfDay(setDate(new Date(new Date().setMonth(new Date().getMonth() - 1)), diaCorte));
+
+  const tienePago = pagosAlumno.some(p => {
+    const fPago = startOfDay(new Date(p.fecha_pago));
+    return fPago.getTime() >= periodoValido.getTime();
   });
 
+  if (tienePago) {
+    return { estado: 'AL_DIA', fechaCorte: periodoValido, ultimoPago: pagosAlumno[0] };
+  }
+
+  // Si no tiene pago y ya pasó la fecha de corte...
   return {
-    estado:      tienePago ? 'AL_DIA' : 'PENDIENTE',
-    fechaCorte,
-    ultimoPago:  pagosAlumno[0] || null,
+    estado: 'PENDIENTE',
+    fechaCorte: periodoValido,
+    ultimoPago: pagosAlumno[0] || null,
   };
 };
 
