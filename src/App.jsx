@@ -171,17 +171,19 @@ function App() {
     };
 
     const initApp = async () => {
-      // Simplificado: dejar que onAuthStateChange maneje todo
-      // Solo cargar desde cache para UI responsiva
+      // SOLO cargar desde cache - sin queries a BD
       const cached = loadProfile();
-      if (cached && isMounted) {
-        setUser(cached);
-        isUserLoaded.current = true;
-        setLoading(false);
-        if (!cached.acepta_terminos) fetchLegal();
-        else setLegalText('');
+      
+      if (cached) {
+        if (isMounted) {
+          setUser(cached);
+          isUserLoaded.current = true;
+          setLoading(false);
+          if (!cached.acepta_terminos) fetchLegal();
+          else setLegalText('');
+        }
       } else {
-        // Sin cache, mostrar spinner breve mientras se obtiene sesión
+        // Sin cache, esperar a onAuthStateChange
         if (isMounted) setLoading(true);
       }
     };
@@ -192,18 +194,29 @@ function App() {
       console.log(`Auth event: ${event}`, session ? 'with session' : 'no session');
       
       if (event === 'INITIAL_SESSION') {
-        // Este evento dispara cuando Supabase termina de restaurar la sesión
-        if (session && isMounted) {
-          // Hay sesión guardada, cargarla
-          console.log('📦 Sesión encontrada en INITIAL_SESSION');
-          await updateUserData(session, true);
-        } else if (isMounted) {
-          // No hay sesión, mostrar login
-          console.log('🔓 Sin sesión, mostrando login');
+        // No bloquear con queries aquí — solo establecer estado rápido
+        if (!session && isMounted) {
+          // Sin sesión = mostrar login
           setUser(null);
           clearProfile();
           setLoading(false);
           setLegalText('');
+        } else if (session && isMounted && !user) {
+          // Hay sesión pero no tenemos usuario cargado aún
+          // Cargar desde cache primero (rápido)
+          const cached = loadProfile();
+          if (cached) {
+            setUser(cached);
+            isUserLoaded.current = true;
+            setLoading(false);
+            if (!cached.acepta_terminos) fetchLegal();
+            else setLegalText('');
+          }
+        }
+        
+        // Hacer queries en paralelo sin bloquear (async)
+        if (session) {
+          setImmediate(() => updateUserData(session, true));
         }
         return;
       }
@@ -211,12 +224,20 @@ function App() {
       if (event === 'SIGNED_IN') {
         console.log('✅ Usuario logueado');
         if (session && isMounted) {
-          await updateUserData(session, true);
+          // Cargar rápido del cache
+          const cached = loadProfile();
+          if (cached) {
+            setUser(cached);
+            setLoading(false);
+          }
+          // Actualizar en paralelo
+          setImmediate(() => updateUserData(session, true));
         }
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('🔄 Token refrescado');
         if (session && isMounted) {
-          await updateUserData(session, false);
+          // No refetching, solo actualizar rol si cambió
+          setImmediate(() => updateUserData(session, false));
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('🔓 Usuario deslogueado');
@@ -224,6 +245,12 @@ function App() {
           setUser(null);
           clearProfile();
           clearRoute();
+          isUserLoaded.current = false;
+          setLoading(false);
+          setLegalText(null);
+        }
+      }
+    });
           isUserLoaded.current = false;
           setLoading(false);
           setLegalText(null);
