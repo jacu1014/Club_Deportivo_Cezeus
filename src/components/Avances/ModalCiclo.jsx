@@ -12,13 +12,13 @@ const CATEGORIAS_ALUMNOS = [
   'Categoría Superior (14+)'
 ];
 
-// Pilares técnicos para el radar — se usan como dimensiones de evaluación
+// Pilares técnicos para el radar — IDs numéricos sincronizados con ciclos_items.categoria_id (integer)
 const CATEGORIAS_BASE = [
-  { id: 'tecnica',      nombre: 'Técnica',      icono: 'sports_soccer' },
-  { id: 'tactica',      nombre: 'Táctica',      icono: 'psychology'    },
-  { id: 'fisico',       nombre: 'Físico',        icono: 'fitness_center'},
-  { id: 'psicologico',  nombre: 'Psicológico',   icono: 'self_improvement' },
-  { id: 'actitudinal',  nombre: 'Actitudinal',   icono: 'star'          },
+  { id: 1, nombre: 'Técnica',      icono: 'sports_soccer'    },
+  { id: 2, nombre: 'Táctica',      icono: 'psychology'       },
+  { id: 3, nombre: 'Físico',       icono: 'fitness_center'   },
+  { id: 4, nombre: 'Psicológico',  icono: 'self_improvement' },
+  { id: 5, nombre: 'Actitudinal',  icono: 'star'             },
 ];
 
 export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
@@ -104,7 +104,6 @@ export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
         p_inicio: form.fecha_inicio,
         p_fin: form.fecha_fin,
         p_creador: currentUser.id,
-        p_cats_alumnos: form.categorias_objetivo, 
         p_estructura_tecnica: pilaresTecnicos.map(c => ({
           id: c.id,
           items: c.items.filter(i => i.trim() !== '')

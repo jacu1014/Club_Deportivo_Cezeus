@@ -34,15 +34,18 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const refrescarEstadoGrupo = async () => {
     setLoadingA(true);
     try {
-      let query = supabase.from('usuarios').select('id, primer_nombre, primer_apellido, categoria, foto_url').eq('rol', 'ALUMNO').eq('estado', 'ACTIVO');
-      const categorias = ciclo?.categorias_objetivo;
-      if (categorias?.length > 0) query = query.in('categoria', categorias);
-      
-      const { data: listaAlumnos } = await query.order('primer_nombre');
+      // Cargamos todos los alumnos activos — ciclos_evaluacion no guarda categorias_objetivo
+      const { data: listaAlumnos } = await supabase
+        .from('usuarios')
+        .select('id, primer_nombre, primer_apellido, categoria, foto_url')
+        .eq('rol', 'ALUMNO')
+        .eq('estado', 'ACTIVO')
+        .order('primer_nombre');
       setAlumnos(listaAlumnos || []);
 
+      // Tabla correcta: evaluaciones_avance (no 'evaluaciones')
       const { data: evals } = await supabase
-        .from('evaluaciones')
+        .from('evaluaciones_avance')
         .select('alumno_id')
         .eq('ciclo_id', ciclo.id)
         .eq('tipo', tipo);
