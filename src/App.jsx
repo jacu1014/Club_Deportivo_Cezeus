@@ -172,38 +172,65 @@ function App() {
 
     const initApp = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          const cached = loadProfile();
-          if (cached && isUserLoaded.current) {
-            const roleFromToken = getRoleFromSession(session);
-            if (isMounted) {
-              if (cached.rol !== roleFromToken) {
-                const updated = { ...cached, rol: roleFromToken };
-                saveProfile(updated);
-                setUser(updated);
-              }
-              setLoading(false);
-              if (!cached.acepta_terminos) fetchLegal();
-              else setLegalText('');
-            }
-          } else {
-            await updateUserData(session, true);
+        // 1. Intentar cargar desde localStorage (restauración instantánea)
+        const cached = loadProfile();
+        
+        if (cached) {
+          // Confiamos en el perfil cacheado mientras Supabase se restaura
+          if (isMounted) {
+            setUser(cached);
+            setLoading(false);
+            if (!cached.acepta_terminos) fetchLegal();
+            else setLegalText('');
+            isUserLoaded.current = true;
           }
         } else {
+          // Sin cache, mostrar spinner
+          if (isMounted) setLoading(true);
+        }
+
+        // 2. Sincronizar con Supabase en paralelo (sin bloquear UI)
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session && isMounted) {
+          // Si hay sesión en Supabase, validarla
+          const roleFromToken = getRoleFromSession(session);
+          const profile = await fetchUserProfile(session.user.id);
+          
+          const finalUser = profile
+            ? { ...profile, rol: roleFromToken }
+            : {
+                id: session.user.id,
+                primer_nombre: session.user.user_metadata?.first_name || 'Usuario',
+                rol: roleFromToken,
+                acepta_terminos: false,
+              };
+
+          saveProfile(finalUser);
+          setUser(finalUser);
+          isUserLoaded.current = true;
+          setLoading(false);
+
+          if (!finalUser.acepta_terminos) fetchLegal();
+          else setLegalText('');
+        } else if (!cached && isMounted) {
+          // Sin sesión Y sin cache → limpiar
           clearProfile();
           clearRoute();
-          if (isMounted) {
-            setUser(null);
-            setLoading(false);
-            setLegalText('');
-          }
-        }
-      } catch {
-        if (isMounted) {
+          setUser(null);
           setLoading(false);
           setLegalText('');
+        }
+      } catch (err) {
+        console.error('Error en initApp:', err);
+        if (isMounted) {
+          setLoading(false);
+          // Mantener el perfil en cache si hay error
+          const cached = loadProfile();
+          if (!cached) {
+            clearProfile();
+            setUser(null);
+          }
         }
       }
     };
