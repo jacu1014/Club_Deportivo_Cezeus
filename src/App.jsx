@@ -238,21 +238,52 @@ function App() {
     let visTimer;
     const handleVisibilityChange = () => {
       clearTimeout(visTimer);
-      visTimer = setTimeout(async () => {
-        if (document.visibilityState !== 'visible') return;
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            await updateUserData(session, false);
-          } else {
+      
+      // Si está visible, sincronizar la sesión
+      if (document.visibilityState === 'visible') {
+        visTimer = setTimeout(async () => {
+          try {
+            console.log('👁️ Aplicación visible, sincronizando sesión...');
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+              console.error('❌ Error al obtener sesión:', error);
+              return;
+            }
+            
+            if (session) {
+              // Refrescar el token explícitamente
+              const { error: refreshError } = await supabase.auth.refreshSession();
+              if (refreshError) {
+                console.warn('⚠️ Error refrescando token:', refreshError);
+                // Si falla, forzar logout
+                await supabase.auth.signOut();
+                if (isMounted) {
+                  setUser(null);
+                  clearProfile();
+                }
+              } else {
+                console.log('✅ Token refrescado exitosamente');
+                await updateUserData(session, false);
+              }
+            } else {
+              // Sin sesión, limpiar
+              if (isMounted) {
+                setUser(null);
+                clearProfile();
+                isUserLoaded.current = false;
+              }
+            }
+          } catch (err) {
+            console.error('❌ Error en handleVisibilityChange:', err);
             if (isMounted) {
               setUser(null);
               clearProfile();
               isUserLoaded.current = false;
             }
           }
-        } catch {}
-      }, 3000);
+        }, 500); // Pequeño delay para evitar múltiples llamadas
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
