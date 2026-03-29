@@ -121,73 +121,38 @@ const FinanceDashboard = ({ datos = [], userRol, busqueda }: Props) => {
 
       {/* ── TARJETAS ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {isAdmin ? (
-          <>
-            {/* NUEVA: Total ingresos recibidos */}
-            <div className="bg-[#1e293b] border-l-4 border-violet-400 p-5 rounded-2xl">
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total ingresado</p>
-              <h4 className="text-2xl font-black text-violet-400">{fmt(stats.totalIngresos)}</h4>
-              <p className="text-slate-500 text-[9px] mt-1 font-bold">Suma de todos los ingresos pagados.</p>
-            </div>
-
-            {/* Dinero en caja hoy (ingresos pagados - egresos pagados) */}
-            <div className="bg-emerald-500 border-l-4 border-emerald-300 p-5 rounded-2xl shadow-lg shadow-emerald-500/10">
-              <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest">Dinero que tienes hoy</p>
-              <h4 className="text-2xl font-black text-white">{fmt(stats.dineroHoy)}</h4>
-              <p className="text-emerald-200 text-[9px] mt-1 font-bold">¡Esto es lo que hay en caja!</p>
-            </div>
-
-            {/* Por cobrar */}
-            <div className="bg-[#1e293b] border-l-4 border-cyan-400 p-5 rounded-2xl">
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Falta por cobrar</p>
-              <h4 className="text-2xl font-black text-cyan-400">{fmt(stats.porCobrar)}</h4>
-              <p className="text-slate-500 text-[9px] mt-1 font-bold">Dinero pendiente de ingresos.</p>
-            </div>
-
-            {/* Cuentas por pagar */}
-            <div className="bg-[#1e293b] border-l-4 border-rose-500 p-5 rounded-2xl">
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Cuentas por pagar</p>
-              <h4 className="text-2xl font-black text-rose-400">{fmt(stats.porPagar)}</h4>
-              <p className="text-slate-500 text-[9px] mt-1 font-bold">Gastos o nóminas pendientes.</p>
-            </div>
-          </>
-        ) : (
-          <div className={`col-span-4 p-8 rounded-[2rem] flex items-center justify-between border-b-4 transition-all duration-500 ${
-            (isCoach ? stats.porPagar > 0 : stats.porCobrar > 0)
-              ? 'bg-rose-500/10 border-rose-500 shadow-xl shadow-rose-500/5'
-              : 'bg-emerald-500/10 border-emerald-400 shadow-xl shadow-emerald-500/5'
-          }`}>
-            <div>
-              <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${
-                (isCoach ? stats.porPagar > 0 : stats.porCobrar > 0) ? 'text-rose-400' : 'text-emerald-400'
-              }`}>
-                {isCoach ? 'Control de Honorarios' : 'Estado de cuenta personal'}
-              </p>
-              <h2 className="text-3xl font-black text-white italic tracking-tighter">
-                {isCoach
-                  ? (stats.porPagar > 0 ? `Tienes ${fmt(stats.porPagar)} por cobrar` : '¡Estás al día con tus pagos!')
-                  : (stats.porCobrar > 0 ? `Saldo pendiente de ${fmt(stats.porCobrar)}` : '¡Excelente! Estás al día')
-                }
-              </h2>
-              <p className="text-slate-400 text-xs mt-2 font-medium">
-                {isCoach
-                  ? `Resumen: ${statsEntrenador?.clasesPagadas} pagadas y ${statsEntrenador?.clasesPendientes} pendientes.`
-                  : (stats.porCobrar > 0 ? 'Recuerda ponerte al día con la escuela.' : 'Gracias por tu puntualidad.')
-                }
-              </p>
-            </div>
-            <div className={`flex items-center justify-center w-16 h-16 rounded-full border-2 ${
-              (isCoach ? stats.porPagar > 0 : stats.porCobrar > 0) ? 'border-rose-500/30 bg-rose-500/10' : 'border-emerald-400/30 bg-emerald-400/10'
-            }`}>
-              <span className={`material-symbols-outlined text-4xl ${
-                (isCoach ? stats.porPagar > 0 : stats.porCobrar > 0) ? 'text-rose-500 animate-pulse' : 'text-emerald-400'
-              }`}>
-                {(isCoach ? stats.porPagar > 0 : stats.porCobrar > 0) ? 'payments' : 'check_circle'}
-              </span>
-            </div>
+      {isAdmin && (
+        <>
+          {/* Total ingresos recibidos */}
+          <div className="bg-[#1e293b] border-l-4 border-violet-400 p-5 rounded-2xl">
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total ingresado</p>
+            <h4 className="text-2xl font-black text-violet-400">{fmt(stats.totalIngresos)}</h4>
+            <p className="text-slate-500 text-[9px] mt-1 font-bold">Suma de todos los ingresos pagados.</p>
           </div>
-        )}
-      </div>
+
+          {/* Dinero en caja hoy (ingresos pagados - egresos pagados) */}
+          <div className="bg-emerald-500 border-l-4 border-emerald-300 p-5 rounded-2xl shadow-lg shadow-emerald-500/10">
+            <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest">Dinero que tienes hoy</p>
+            <h4 className="text-2xl font-black text-white">{fmt(stats.dineroHoy)}</h4>
+            <p className="text-emerald-200 text-[9px] mt-1 font-bold">¡Esto es lo que hay en caja!</p>
+          </div>
+
+          {/* Por cobrar */}
+          <div className="bg-[#1e293b] border-l-4 border-cyan-400 p-5 rounded-2xl">
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Falta por cobrar</p>
+            <h4 className="text-2xl font-black text-cyan-400">{fmt(stats.porCobrar)}</h4>
+            <p className="text-slate-500 text-[9px] mt-1 font-bold">Dinero pendiente de ingresos.</p>
+          </div>
+
+          {/* Cuentas por pagar */}
+          <div className="bg-[#1e293b] border-l-4 border-rose-500 p-5 rounded-2xl">
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Cuentas por pagar</p>
+            <h4 className="text-2xl font-black text-rose-400">{fmt(stats.porPagar)}</h4>
+            <p className="text-slate-500 text-[9px] mt-1 font-bold">Gastos o nóminas pendientes.</p>
+          </div>
+        </>
+      )}
+    </div>
 
       {/* ── GRÁFICOS ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
