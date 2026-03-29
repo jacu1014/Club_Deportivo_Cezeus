@@ -3,7 +3,6 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { useAvances } from '../../hooks/useAvances';
 
 // Categorías exactas sincronizadas con la base de datos y data.ts
 const CATEGORIAS_ALUMNOS = [
@@ -13,8 +12,17 @@ const CATEGORIAS_ALUMNOS = [
   'Categoría Superior (14+)'
 ];
 
+// Pilares técnicos para el radar — se usan como dimensiones de evaluación
+const CATEGORIAS_BASE = [
+  { id: 'tecnica',      nombre: 'Técnica',      icono: 'sports_soccer' },
+  { id: 'tactica',      nombre: 'Táctica',      icono: 'psychology'    },
+  { id: 'fisico',       nombre: 'Físico',        icono: 'fitness_center'},
+  { id: 'psicologico',  nombre: 'Psicológico',   icono: 'self_improvement' },
+  { id: 'actitudinal',  nombre: 'Actitudinal',   icono: 'star'          },
+];
+
 export default function ModalCiclo({ onClose, onGuardar, currentUser }) {
-  const { categoriasBase } = useAvances(currentUser);
+  const categoriasBase = CATEGORIAS_BASE;
   
   const hoy = new Date().toISOString().split('T')[0];
   const [paso, setPaso] = useState(1);
