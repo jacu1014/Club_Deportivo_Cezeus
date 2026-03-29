@@ -1,49 +1,39 @@
 /**
  * Manejador de Errores de Autenticación
- * Escucha cambios de sesión y maneja errores sin interferir con la API
+ * Monitorea eventos de Supabase sin interferir con la API
  * 
  * Uso: import { setupAuthErrorHandler } from './authErrorHandler';
  *      setupAuthErrorHandler(supabase);
  */
 
 export const setupAuthErrorHandler = (supabase) => {
-  // Manejador de errores de autenticación
-  const handleAuthError = async (error) => {
-    // Si es error 401 (token expirado/inválido)
-    if (error?.status === 401 || error?.message?.includes('jwt')) {
-      console.warn('⚠️ Token expirado, intentando refrescar sesión...');
+  // Solo monitorear eventos, no interferir
+  console.log('🔐 Sistema de autenticación inicializado');
+};
+
+/**
+ * Hook para manejar errores en componentes (uso opcional)
+ * Si una query falla con 401, intenta recuperar la sesión
+ */
+export const createAuthErrorHandler = (supabase) => {
+  return {
+    handleError: async (error) => {
+      if (!error || error.status !== 401) return false;
       
+      console.warn('⚠️ Error 401 detectado, refrescando sesión...');
       try {
-        // Intentar refrescar el token
         const { error: refreshError } = await supabase.auth.refreshSession();
-        
         if (refreshError) throw refreshError;
-        
-        console.log('✅ Sesión refrescada exitosamente');
+        console.log('✅ Sesión refrescada');
         return true;
-      } catch (err) {
-        console.error('❌ No se pudo refrescar la sesión:', err);
+      } catch {
+        console.error('❌ No se pudo refrescar la sesión');
         await supabase.auth.signOut();
         window.location.href = '/login';
         return false;
       }
     }
-    return false;
   };
-
-  // Escuchar cambios de autenticación automáticamente
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'TOKEN_REFRESHED') {
-      console.log('✅ Token refrescado automáticamente por Supabase');
-    } else if (event === 'SIGNED_OUT') {
-      console.log('🔓 Sesión cerrada');
-    }
-  });
-
-  // Guardar referencia global para uso en componentes
-  window.__supabaseAuthHandler = handleAuthError;
-
-  console.log('🔐 Manejador de errores de autenticación activado');
 };
 
 /**

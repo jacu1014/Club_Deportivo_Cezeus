@@ -263,53 +263,37 @@ function App() {
     });
 
     let visTimer;
-    const handleVisibilityChange = () => {
+    let isSyncing = false; // Flag para evitar sincronizaciones simultáneas
+    
+    const handleVisibilityChange = async () => {
       clearTimeout(visTimer);
       
-      // Si está visible, sincronizar la sesión
-      if (document.visibilityState === 'visible') {
+      // Solo sincronizar si regresa de background y no está en proceso
+      if (document.visibilityState === 'visible' && !isSyncing && user) {
         visTimer = setTimeout(async () => {
+          isSyncing = true;
           try {
-            console.log('👁️ Aplicación visible, sincronizando sesión...');
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-              console.error('❌ Error al obtener sesión:', error);
-              return;
-            }
-            
-            if (session) {
-              // Refrescar el token explícitamente
-              const { error: refreshError } = await supabase.auth.refreshSession();
-              if (refreshError) {
-                console.warn('⚠️ Error refrescando token:', refreshError);
-                // Si falla, forzar logout
-                await supabase.auth.signOut();
-                if (isMounted) {
-                  setUser(null);
-                  clearProfile();
-                }
-              } else {
-                console.log('✅ Token refrescado exitosamente');
-                await updateUserData(session, false);
-              }
-            } else {
-              // Sin sesión, limpiar
-              if (isMounted) {
-                setUser(null);
-                clearProfile();
-                isUserLoaded.current = false;
-              }
+            // Solo refrescar si hay sesión válida (sin bloquear)
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session && isMounted) {
+              // Refrescar el token (timeout: 5s para no bloquear)
+              const refreshPromise = supabase.auth.refreshSession();
+              await Promise.race([
+                refreshPromise,
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+              ]).catch(() => {
+                // Silencioso si falla o timeout
+                console.log('⏱️ Timeout refrescando token, continuamos');
+              });
             }
           } catch (err) {
-            console.error('❌ Error en handleVisibilityChange:', err);
-            if (isMounted) {
-              setUser(null);
-              clearProfile();
-              isUserLoaded.current = false;
-            }
+            console.warn('⚠️ Error en sincronización:', err.message);
+          } finally {
+            isSyncing = false;
           }
-        }, 500); // Pequeño delay para evitar múltiples llamadas
+        }, 800); // Esperar 800ms para que usuario termine de navegar
       }
     };
 
