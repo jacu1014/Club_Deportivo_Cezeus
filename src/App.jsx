@@ -251,12 +251,6 @@ function App() {
         }
       }
     });
-          isUserLoaded.current = false;
-          setLoading(false);
-          setLegalText(null);
-        }
-      }
-    });
 
     let visTimer;
     let isSyncing = false; // Flag para evitar sincronizaciones simultáneas
