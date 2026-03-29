@@ -229,12 +229,12 @@ const PagosModule = ({ user }: PagosModuleProps) => {
         )}
       </div>
 
-      {/* SECCIÓN DE ESTADO DE CUENTA (CORREGIDA) */}
+      {/* SECCIÓN DE ESTADO DE CUENTA (UNIFICADA) */}
       {userRol === 'ALUMNO' && !loading && (
         <div className="mb-6">
-          {/* Lógica: 
-            Si existe AL MENOS UN pago con estado 'PENDIENTE', dejamos que AlertasPago gestione los mensajes.
-            Si NO hay nada pendiente, mostramos únicamente nuestro banner de "Al Día".
+          {/* Lógica de exclusión:
+            1. Si hay al menos un pago PENDIENTE, se delega TODA la comunicación a AlertasPago.
+            2. Si todos los pagos están al día, se muestra el banner de éxito y se oculta AlertasPago.
           */}
           {datos.some(pago => pago.estado_pago === 'PENDIENTE') ? (
             <AlertasPago currentUser={user} />
@@ -244,7 +244,7 @@ const PagosModule = ({ user }: PagosModuleProps) => {
                 <span className="material-symbols-outlined text-emerald-400">verified</span>
               </div>
               <div>
-                <h3 className="text-emerald-400 font-black text-[10px] uppercase tracking-[0.2em]">Estatus de Cuenta</h3>
+                <h3 className="text-emerald-400 font-black text-[10px] uppercase tracking-[0.2em]">Finanzas Cezeus</h3>
                 <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider leading-relaxed">
                   Te encuentras al día con tus obligaciones. ¡Gracias por tu puntualidad!
                 </p>
