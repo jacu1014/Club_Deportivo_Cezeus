@@ -201,9 +201,8 @@ function App() {
           clearProfile();
           setLoading(false);
           setLegalText('');
-        } else if (session && isMounted && !user) {
-          // Hay sesión pero no tenemos usuario cargado aún
-          // Cargar desde cache primero (rápido)
+        } else if (session && isMounted) {
+          // Hay sesión, cargar desde cache primero (rápido)
           const cached = loadProfile();
           if (cached) {
             setUser(cached);
@@ -211,33 +210,44 @@ function App() {
             setLoading(false);
             if (!cached.acepta_terminos) fetchLegal();
             else setLegalText('');
+          } else {
+            // Sin cache, mostrar spinner breve
+            setLoading(true);
           }
-        }
-        
-        // Hacer queries en paralelo sin bloquear (async)
-        if (session) {
-          setImmediate(() => updateUserData(session, true));
+          
+          // Hacer queries en paralelo sin bloquear (async)
+          try {
+            await updateUserData(session, true);
+          } catch (err) {
+            console.error('Error en INITIAL_SESSION updateUserData:', err);
+          }
         }
         return;
       }
       
       if (event === 'SIGNED_IN') {
-        console.log('✅ Usuario logueado');
+        console.log('✅ Usuario logueado - cargando perfil...');
         if (session && isMounted) {
-          // Cargar rápido del cache
-          const cached = loadProfile();
-          if (cached) {
-            setUser(cached);
-            setLoading(false);
+          try {
+            // Durante login, BLOQUEAR hasta cargar todo correctamente
+            await updateUserData(session, true);
+          } catch (err) {
+            console.error('Error cargando perfil después de login:', err);
+            if (isMounted) {
+              setUser(null);
+              clearProfile();
+            }
           }
-          // Actualizar en paralelo
-          setImmediate(() => updateUserData(session, true));
         }
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('🔄 Token refrescado');
         if (session && isMounted) {
-          // No refetching, solo actualizar rol si cambió
-          setImmediate(() => updateUserData(session, false));
+          // Solo actualizar rol si cambió
+          try {
+            await updateUserData(session, false);
+          } catch (err) {
+            console.error('Error en TOKEN_REFRESHED:', err);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('🔓 Usuario deslogueado');
