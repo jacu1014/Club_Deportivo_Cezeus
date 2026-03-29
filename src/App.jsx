@@ -172,60 +172,64 @@ function App() {
 
     const initApp = async () => {
       try {
-        // 1. Intentar cargar desde localStorage (restauración instantánea)
-        const cached = loadProfile();
-        
-        if (cached) {
-          // Confiamos en el perfil cacheado mientras Supabase se restaura
-          if (isMounted) {
-            setUser(cached);
-            setLoading(false);
-            if (!cached.acepta_terminos) fetchLegal();
-            else setLegalText('');
-            isUserLoaded.current = true;
-          }
-        } else {
-          // Sin cache, mostrar spinner
-          if (isMounted) setLoading(true);
-        }
+        if (isMounted) setLoading(true);
 
-        // 2. Sincronizar con Supabase en paralelo (sin bloquear UI)
+        // 1. Obtener sesión de Supabase (esperamos a que se restaure)
         const { data: { session } } = await supabase.auth.getSession();
 
-        if (session && isMounted) {
-          // Si hay sesión en Supabase, validarla
-          const roleFromToken = getRoleFromSession(session);
-          const profile = await fetchUserProfile(session.user.id);
+        if (session) {
+          // 2a. HAY SESIÓN: Validar y refrescar token PRIMERO
+          try {
+            const { error: refreshError } = await supabase.auth.refreshSession();
+            
+            if (refreshError) {
+              // Token no se puede refrescar → logout
+              console.warn('⚠️ Token expirado y no se puede refrescar');
+              await supabase.auth.signOut();
+              clearProfile();
+              clearRoute();
+              if (isMounted) {
+                setUser(null);
+                setLoading(false);
+                setLegalText('');
+              }
+              return;
+            }
+
+            // Token válido → cargar perfil completo
+            const newSession = await supabase.auth.getSession();
+            if (newSession.data.session) {
+              await updateUserData(newSession.data.session, true);
+            }
+          } catch (err) {
+            console.error('Error validando sesión:', err);
+            await supabase.auth.signOut();
+            clearProfile();
+            if (isMounted) {
+              setUser(null);
+              setLoading(false);
+            }
+          }
+        } else {
+          // 2b. SIN SESIÓN: Cargar desde cache si existe
+          const cached = loadProfile();
+          if (cached && isMounted) {
+            setUser(cached);
+            if (!cached.acepta_terminos) fetchLegal();
+            else setLegalText('');
+          } else if (isMounted) {
+            // Sin sesión ni cache → limpio login
+            setUser(null);
+            setLegalText('');
+          }
           
-          const finalUser = profile
-            ? { ...profile, rol: roleFromToken }
-            : {
-                id: session.user.id,
-                primer_nombre: session.user.user_metadata?.first_name || 'Usuario',
-                rol: roleFromToken,
-                acepta_terminos: false,
-              };
-
-          saveProfile(finalUser);
-          setUser(finalUser);
-          isUserLoaded.current = true;
-          setLoading(false);
-
-          if (!finalUser.acepta_terminos) fetchLegal();
-          else setLegalText('');
-        } else if (!cached && isMounted) {
-          // Sin sesión Y sin cache → limpiar
-          clearProfile();
-          clearRoute();
-          setUser(null);
-          setLoading(false);
-          setLegalText('');
+          if (isMounted) setLoading(false);
         }
       } catch (err) {
         console.error('Error en initApp:', err);
         if (isMounted) {
           setLoading(false);
-          // Mantener el perfil en cache si hay error
+          // Mantener cache si hay error
           const cached = loadProfile();
           if (!cached) {
             clearProfile();
