@@ -7,7 +7,9 @@ export default defineConfig({
     react({
       jsxRuntime: 'automatic',
     }),
-    sitemap({
+    // Solo generar sitemap en desarrollo local, no en Vercel
+    // Vercel necesita que robots.txt esté en dist/, algo que ocurre después del build
+    process.env.NODE_ENV !== 'production' && sitemap({
       hostname: 'https://www.clubdeportivocezeus.com',
       // Rutas públicas de la landing (las del app quedan excluidas porque requieren login)
       dynamicRoutes: [
@@ -24,5 +26,5 @@ export default defineConfig({
       priority:   0.8,
       lastmod:    new Date().toISOString().split('T')[0],
     }),
-  ],
+  ].filter(Boolean), // Elimina plugins falsos (undefined)
 });
