@@ -111,7 +111,6 @@ export const ROLE_PERMISSIONS: Record<string, PaginasApp[]> = {
   [RolUsuario.ALUMNO]: [
     PaginasApp.DASHBOARD,
     PaginasApp.ALUMNOS,
-    PaginasApp.AVANCES,
     PaginasApp.PAGOS,
     PaginasApp.CALENDARIO,
     PaginasApp.CONFIGURACION,

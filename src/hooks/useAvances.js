@@ -1,10 +1,7 @@
 // src/hooks/useAvances.js
-// VERSIÓN RECTIFICADA: Ajustada a la estructura real de Supabase (Tablas dinámicas)
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-// Caché externa para evitar saltos visuales al cambiar entre alumnos
 const cacheItems = {};
 
 export const useAvances = (currentUser) => {
@@ -16,9 +13,9 @@ export const useAvances = (currentUser) => {
     setLoadingCiclos(true);
     try {
       const { data, error } = await supabase
-        .from('ciclos_evaluacion') // Nombre real de tu tabla
+        .from('ciclos_evaluacion')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('fecha_inicio', { ascending: false });
       
       if (error) throw error;
       setCiclos(data || []);
@@ -33,7 +30,36 @@ export const useAvances = (currentUser) => {
     fetchCiclos();
   }, [fetchCiclos]);
 
-  // 2. Obtener Ítems configurados para un ciclo (Dinámico)
+  // 2. Gestión de Ciclos (Crear, Toggle, Eliminar)
+  const crearCiclo = async (payload) => {
+    const { data, error } = await supabase
+      .from('ciclos_evaluacion')
+      .insert([payload])
+      .select()
+      .single();
+    if (error) throw error;
+    await fetchCiclos();
+    return data;
+  };
+
+  const toggleCiclo = async (id, estadoActual) => {
+    const { error } = await supabase
+      .from('ciclos_evaluacion')
+      .update({ activo: !estadoActual })
+      .eq('id', id);
+    if (error) throw error;
+  };
+
+  const eliminarCiclo = async (id) => {
+    const { error } = await supabase
+      .from('ciclos_evaluacion')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    // El refresh se maneja en el componente tras la promesa
+  };
+
+  // 3. Ítems del Ciclo
   const getItemsConCategorias = useCallback(async (cicloId) => {
     if (!cicloId) return [];
     if (cacheItems[cicloId]) return cacheItems[cicloId];
@@ -54,17 +80,17 @@ export const useAvances = (currentUser) => {
     }
   }, []);
 
-  // 3. Guardar Evaluación Completa (Cabecera + Detalle)
+  // 4. Guardado de Evaluación (Transaccional simulado)
   const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas }) => {
     try {
-      // A. Insertar en evaluaciones_avance (Cabecera)
+      // Primero: Insertar Cabecera
       const { data: evalCabecera, error: errCabecera } = await supabase
         .from('evaluaciones_avance')
         .insert([{
           alumno_id,
           ciclo_id,
           entrenador_id: currentUser?.id,
-          tipo, // 'INICIAL' o 'FINAL'
+          tipo,
           fecha_evaluacion: new Date().toISOString().split('T')[0],
           observaciones
         }])
@@ -73,8 +99,7 @@ export const useAvances = (currentUser) => {
 
       if (errCabecera) throw errCabecera;
 
-      // B. Preparar y insertar en evaluaciones_items (Detalle)
-      // 'notas' debe ser un objeto: { [ciclo_item_id]: calificacion }
+      // Segundo: Insertar Detalles (Items)
       const registrosNotas = Object.entries(notas).map(([itemId, valor]) => ({
         evaluacion_id: evalCabecera.id,
         ciclo_item_id: itemId,
@@ -86,35 +111,66 @@ export const useAvances = (currentUser) => {
         .insert(registrosNotas);
 
       if (errNotas) throw errNotas;
-      
       return evalCabecera;
     } catch (err) {
-      console.error('Error en guardado completo:', err.message);
       throw err;
     }
   };
 
-  // 4. Obtener Evaluaciones de un Ciclo (Para Resumen/Heatmap)
-  const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
-    try {
-      const { data, error } = await supabase
-        .from('evaluaciones_avance')
-        .select(`
-          *,
-          usuarios:alumno_id (id, primer_nombre, primer_apellido, foto_url),
-          evaluaciones_items (*)
-        `)
-        .eq('ciclo_id', cicloId);
-
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.error('Error fetchEvaluacionesCiclo:', err.message);
-      return [];
-    }
+  // 5. Observaciones de Seguimiento (Módulo SeguimientoAlumno)
+  const fetchObservaciones = useCallback(async (alumnoId) => {
+    const { data, error } = await supabase
+      .from('observaciones_seguimiento')
+      .select('*')
+      .eq('alumno_id', alumnoId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   }, []);
 
-  // 5. Helpers para Radar Chart
+  const agregarObservacion = async (payload) => {
+    const { data, error } = await supabase
+      .from('observaciones_seguimiento')
+      .insert([{ ...payload, entrenador_id: currentUser?.id }])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  };
+
+  const editarObservacion = async (id, nota, categoria) => {
+    const { data, error } = await supabase
+      .from('observaciones_seguimiento')
+      .update({ nota, categoria })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  };
+
+  const eliminarObservacion = async (id) => {
+    const { error } = await supabase
+      .from('observaciones_seguimiento')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  };
+
+  // 6. Reportes y Comparativas
+  const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
+    const { data, error } = await supabase
+      .from('evaluaciones_avance')
+      .select(`
+        *,
+        usuarios!alumno_id (id, primer_nombre, primer_apellido, foto_url),
+        evaluaciones_items (*)
+      `)
+      .eq('ciclo_id', cicloId);
+    if (error) throw error;
+    return data || [];
+  }, []);
+
   const prepararDatosComparativos = (itemsCiclo, evalInicial, evalFinal) => {
     return itemsCiclo.map(item => {
       const notaI = evalInicial?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
@@ -132,8 +188,15 @@ export const useAvances = (currentUser) => {
     ciclos,
     loadingCiclos,
     fetchCiclos,
+    crearCiclo,
+    toggleCiclo,
+    eliminarCiclo,
     getItemsConCategorias,
     guardarEvaluacionCompleta,
+    fetchObservaciones,
+    agregarObservacion,
+    editarObservacion,
+    eliminarObservacion,
     fetchEvaluacionesCiclo,
     prepararDatosComparativos,
     canEvaluar: ['SUPER_ADMIN', 'DIRECTOR', 'ENTRENADOR'].includes(currentUser?.rol)

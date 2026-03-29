@@ -1,14 +1,10 @@
 // src/pages/AvancesPage.jsx
 // Página principal del módulo "Avances de Procesos".
-// Reemplaza la antigua página de Evaluación (/evaluacion).
-// En App.jsx: lazy(() => import('./pages/AvancesPage'))  →  path="/evaluacion"
-// En Sidebar: el label 'EVALUACIÓN' → 'AVANCES' (opcional, ya apunta a /evaluacion)
-
 import React, { useState, useEffect } from 'react';
 import { useAvances } from '../hooks/useAvances';
-import ModalCiclo       from '../components/Avances/ModalCiclo';
-import FormEvaluacion   from '../components/Avances/FormEvaluacion';
-import ResumenCiclo     from '../components/Avances/ResumenCiclo';
+import ModalCiclo        from '../components/Avances/ModalCiclo';
+import FormEvaluacion    from '../components/Avances/FormEvaluacion';
+import ResumenCiclo      from '../components/Avances/ResumenCiclo';
 import SeguimientoAlumno from '../components/SeguimientoAlumno';
 import { supabase } from '../lib/supabaseClient';
 
@@ -110,7 +106,7 @@ export default function AvancesPage({ user }) {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl text-[11px] font-black uppercase
+        <div className={`fixed bottom-6 right-6 z-[100] px-5 py-3 rounded-2xl text-[11px] font-black uppercase
                          tracking-widest shadow-xl animate-in slide-in-from-bottom-2
                          ${toast.tipo === 'ok'
                            ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
@@ -163,7 +159,14 @@ export default function AvancesPage({ user }) {
           onEvaluar={handleIrAEvaluar}
           onResumen={handleVerResumen}
           onToggle={(id, activo) => toggleCiclo(id, activo).then(fetchCiclos).catch(e => mostrarToast(e.message, 'error'))}
-          onEliminar={(id, nombre) => eliminarCiclo(id, nombre).catch(e => mostrarToast(e.message, 'error'))}
+          onEliminar={(id, nombre) => 
+            eliminarCiclo(id, nombre)
+              .then(() => {
+                mostrarToast(`Ciclo "${nombre}" eliminado`);
+                fetchCiclos(); // Refrescar lista tras eliminar
+              })
+              .catch(e => mostrarToast(e.message, 'error'))
+          }
         />
       )}
 
@@ -174,7 +177,7 @@ export default function AvancesPage({ user }) {
           alumnoInicial={alumnoSeleccionado}
           currentUser={user}
           onVolver={() => setVista('ciclos')}
-          onGuardado={(msg) => mostrarToast(msg)}
+          onGuardado={(msg) => mostrarToast(msg || 'Evaluación guardada')}
         />
       )}
 
@@ -209,6 +212,7 @@ export default function AvancesPage({ user }) {
             try {
               await crearCiclo(payload);
               setModalCiclo(false);
+              fetchCiclos(); // Refrescar tras crear
               mostrarToast('Ciclo creado correctamente.');
             } catch (e) { mostrarToast(e.message, 'error'); }
           }}
@@ -231,7 +235,6 @@ function ListaCiclos({ ciclos, loading, canEvaluar, onCrear, onEvaluar, onResume
 
   return (
     <div className="space-y-8">
-      {/* Botón crear */}
       {canEvaluar && (
         <div className="flex justify-end">
           <button onClick={onCrear}
@@ -257,7 +260,6 @@ function ListaCiclos({ ciclos, loading, canEvaluar, onCrear, onEvaluar, onResume
         </div>
       ) : (
         <>
-          {/* Ciclos activos */}
           {activos.length > 0 && (
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-2">
@@ -274,7 +276,6 @@ function ListaCiclos({ ciclos, loading, canEvaluar, onCrear, onEvaluar, onResume
             </div>
           )}
 
-          {/* Ciclos cerrados */}
           {inactivos.length > 0 && (
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
@@ -324,7 +325,6 @@ function CicloCard({ ciclo, canEvaluar, onEvaluar, onResumen, onToggle, onElimin
         </div>
       </div>
 
-      {/* Acciones */}
       <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
         {canEvaluar && ciclo.activo && (
           <button onClick={() => onEvaluar(ciclo)}
