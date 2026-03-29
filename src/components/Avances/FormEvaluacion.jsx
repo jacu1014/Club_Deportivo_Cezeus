@@ -39,7 +39,7 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         .from('usuarios')
         .select('id, primer_nombre, primer_apellido, categoria, foto_url')
         .eq('rol', 'ALUMNO')
-        .eq('estado', 'ACTIVO')
+        .eq('estado', 'Activo')
         .order('primer_nombre');
       setAlumnos(listaAlumnos || []);
 
