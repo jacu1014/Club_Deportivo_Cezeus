@@ -93,23 +93,53 @@ export const useAvances = (currentUser) => {
   }, []);
 
   // 4. Guardado de Evaluación Completa
-  const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas }) => {
+  const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas, evalExistente }) => {
     try {
-      const { data: evalCabecera, error: errCabecera } = await supabase
-        .from('evaluaciones_avance')
-        .insert([{
-          alumno_id,
-          ciclo_id,
-          entrenador_id: currentUser?.id,
-          tipo,
-          fecha_evaluacion: new Date().toISOString().split('T')[0],
-          observaciones
-        }])
-        .select()
-        .single();
+      let evalCabecera;
 
-      if (errCabecera) throw errCabecera;
+      if (evalExistente && evalExistente.id) {
+        // ACTUALIZAR evaluación existente
+        const { data, error: errUpdate } = await supabase
+          .from('evaluaciones_avance')
+          .update({
+            entrenador_id: currentUser?.id,
+            fecha_evaluacion: new Date().toISOString().split('T')[0],
+            observaciones
+          })
+          .eq('id', evalExistente.id)
+          .select()
+          .single();
 
+        if (errUpdate) throw errUpdate;
+        evalCabecera = data;
+
+        // Eliminar notas previas
+        const { error: errDelete } = await supabase
+          .from('evaluaciones_items')
+          .delete()
+          .eq('evaluacion_id', evalExistente.id);
+
+        if (errDelete) throw errDelete;
+      } else {
+        // INSERTAR nueva evaluación
+        const { data, error: errCabecera } = await supabase
+          .from('evaluaciones_avance')
+          .insert([{
+            alumno_id,
+            ciclo_id,
+            entrenador_id: currentUser?.id,
+            tipo,
+            fecha_evaluacion: new Date().toISOString().split('T')[0],
+            observaciones
+          }])
+          .select()
+          .single();
+
+        if (errCabecera) throw errCabecera;
+        evalCabecera = data;
+      }
+
+      // Insertar nuevas notas
       const registrosNotas = Object.entries(notas).map(([itemId, valor]) => ({
         evaluacion_id: evalCabecera.id,
         ciclo_item_id: itemId,

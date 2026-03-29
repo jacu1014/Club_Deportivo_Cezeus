@@ -132,7 +132,8 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
         ciclo_id: ciclo.id,
         tipo,
         observaciones,
-        notas: valores 
+        notas: valores,
+        evalExistente
       });
 
       // Actualizar progreso local
