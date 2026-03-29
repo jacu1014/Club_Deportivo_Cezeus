@@ -228,29 +228,14 @@ const PagosModule = ({ user }: PagosModuleProps) => {
           </button>
         )}
       </div>
-
-      {/* SECCIÓN DE ESTADO DE CUENTA (UNIFICADA) */}
+{/* SECCIÓN DE ESTADO DE CUENTA (DELEGADA A MÓDULO ALERTA) */}
       {userRol === 'ALUMNO' && !loading && (
         <div className="mb-6">
-          {/* Lógica de exclusión:
-            1. Si hay al menos un pago PENDIENTE, se delega TODA la comunicación a AlertasPago.
-            2. Si todos los pagos están al día, se muestra el banner de éxito y se oculta AlertasPago.
+          {/* Dejamos solo AlertasPago. 
+            Este componente ya maneja internamente el mensaje de "Al día" 
+            y las alertas de deuda, evitando duplicidad de banners.
           */}
-          {datos.some(pago => pago.estado_pago === 'PENDIENTE') ? (
-            <AlertasPago currentUser={user} />
-          ) : (
-            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-4 animate-in fade-in slide-in-from-top duration-500">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-emerald-400">verified</span>
-              </div>
-              <div>
-                <h3 className="text-emerald-400 font-black text-[10px] uppercase tracking-[0.2em]">Finanzas Cezeus</h3>
-                <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider leading-relaxed">
-                  Te encuentras al día con tus obligaciones. ¡Gracias por tu puntualidad!
-                </p>
-              </div>
-            </div>
-          )}
+          <AlertasPago currentUser={user} />
         </div>
       )}
 
