@@ -204,13 +204,10 @@ export default function AvancesPage({ user }) {
         <ModalCiclo
           currentUser={user}
           onClose={() => setModalCiclo(false)}
-          onGuardar={async (payload) => {
-            try {
-              await crearCiclo(payload);
-              setModalCiclo(false);
-              fetchCiclos();
-              mostrarToast('Ciclo creado correctamente.');
-            } catch (e) { mostrarToast(e.message, 'error'); }
+          onGuardar={() => {
+            setModalCiclo(false);
+            fetchCiclos();
+            mostrarToast('Ciclo creado correctamente.');
           }}
         />
       )}

@@ -100,10 +100,10 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
   const completados = evaluacionesRealizadas.length;
 
   const alumnosFiltradosBusqueda = useMemo(() => {
-    if (!busqueda.trim()) return [];
+    if (!busqueda.trim()) return alumnos; // Sin búsqueda → mostrar todos
     return alumnos.filter(a => 
       `${a.primer_nombre} ${a.primer_apellido}`.toLowerCase().includes(busqueda.toLowerCase())
-    ).slice(0, 5);
+    );
   }, [busqueda, alumnos]);
 
   const datosRadar = useMemo(() => {
@@ -222,18 +222,39 @@ export default function FormEvaluacion({ ciclo, alumnoInicial, currentUser, onVo
             <div className="relative">
               <label className="text-[9px] font-black text-slate-500 uppercase ml-2 mb-1 block">Buscar Alumno</label>
               <input 
-                type="text" placeholder="Nombre del alumno..." value={busqueda}
+                type="text" placeholder="Filtrar por nombre..." value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-primary/50 transition-all"
               />
-              {busqueda && alumnosFiltradosBusqueda.length > 0 && (
-                <div className="absolute top-full left-0 w-full bg-[#0f172a] border border-white/10 rounded-xl mt-2 overflow-hidden z-50 shadow-2xl">
-                  {alumnosFiltradosBusqueda.map(a => (
-                    <button key={a.id} onClick={() => { setAlumno(a); setBusqueda(''); }} className="w-full p-3 flex items-center gap-3 hover:bg-primary/10 text-left border-b border-white/5 last:border-0">
-                       <span className="text-[10px] text-white font-bold uppercase">{a.primer_nombre} {a.primer_apellido}</span>
-                    </button>
-                  ))}
+              {/* Lista siempre visible — filtra cuando se escribe */}
+              {alumnosFiltradosBusqueda.length > 0 && (
+                <div className="mt-2 bg-[#0f172a] border border-white/10 rounded-xl overflow-hidden max-h-[220px] overflow-y-auto custom-scrollbar">
+                  {alumnosFiltradosBusqueda.map(a => {
+                    const isDone = evaluacionesRealizadas.includes(a.id);
+                    return (
+                      <button key={a.id} onClick={() => { setAlumno(a); setBusqueda(''); }}
+                        className={`w-full p-3 flex items-center justify-between gap-3 hover:bg-primary/10 text-left border-b border-white/5 last:border-0 transition-colors
+                          ${alumno?.id === a.id ? 'bg-primary/15 border-l-2 border-l-primary' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDone ? 'bg-emerald-500' : 'bg-slate-600'}`} />
+                          <span className="text-[10px] text-white font-bold uppercase">
+                            {a.primer_nombre} {a.primer_apellido}
+                          </span>
+                        </div>
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0
+                          ${isDone ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-slate-500'}`}>
+                          {isDone ? '✓' : 'Pendiente'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+              {loadingAlumnos && (
+                <p className="text-[9px] text-slate-500 uppercase font-black mt-2 px-2 animate-pulse">Cargando alumnos...</p>
+              )}
+              {!loadingAlumnos && alumnos.length === 0 && (
+                <p className="text-[9px] text-slate-600 uppercase font-black mt-2 px-2">No hay alumnos activos</p>
               )}
             </div>
 
