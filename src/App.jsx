@@ -171,83 +171,49 @@ function App() {
     };
 
     const initApp = async () => {
-      try {
-        // 1. Cargar usuario desde localStorage INMEDIATAMENTE (responsive)
-        const cached = loadProfile();
-        
-        if (cached && isMounted) {
-          setUser(cached);
-          if (!cached.acepta_terminos) fetchLegal();
-          else setLegalText('');
-          isUserLoaded.current = true;
-          setLoading(false);
-        } else {
-          if (isMounted) setLoading(true);
-        }
-
-        // 2. Validar sesión en paralelo (sin bloquear)
-        setTimeout(async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-
-            if (session) {
-              // Hay sesión, intentar refrescar token
-              const { data, error: refreshError } = await supabase.auth.refreshSession();
-              
-              if (refreshError || !data.session) {
-                // Token inválido
-                console.warn('⚠️ Token inválido, cerrando sesión');
-                await supabase.auth.signOut();
-                if (isMounted) {
-                  setUser(null);
-                  clearProfile();
-                  clearRoute();
-                }
-              } else if (isMounted) {
-                // Token válido, actualizar perfil
-                await updateUserData(data.session, true);
-              }
-            } else if (!cached && isMounted) {
-              // Sin sesión ni cache
-              setUser(null);
-              clearProfile();
-            }
-          } catch (err) {
-            console.error('Error validando sesión:', err);
-            // Continuar con cache aunque haya error
-          } finally {
-            if (isMounted) setLoading(false);
-          }
-        }, 300); // Delay pequeño para que la UI se renderize primero
-      } catch (err) {
-        console.error('Error en initApp:', err);
-        if (isMounted) {
-          setLoading(false);
-          const cached = loadProfile();
-          if (!cached) {
-            clearProfile();
-            setUser(null);
-          }
-        }
+      // Simplificado: dejar que onAuthStateChange maneje todo
+      // Solo cargar desde cache para UI responsiva
+      const cached = loadProfile();
+      if (cached && isMounted) {
+        setUser(cached);
+        isUserLoaded.current = true;
+        setLoading(false);
+        if (!cached.acepta_terminos) fetchLegal();
+        else setLegalText('');
+      } else {
+        // Sin cache, mostrar spinner breve mientras se obtiene sesión
+        if (isMounted) setLoading(true);
       }
     };
 
     initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`Auth event: ${event}`, session ? 'with session' : 'no session');
+      
       if (event === 'INITIAL_SESSION') {
-        if (!session && isMounted) {
-          clearProfile();
-          setLoading(false);
-          setLegalText('');
+        // INITIAL_SESSION solo para detectar el evento inicial
+        // pero no limpiar nada aún (dejar que los otros eventos lo hagan)
+        if (session && isMounted) {
+          // Hay sesión, refrescar inmediatamente
+          await updateUserData(session, true);
         }
+        // Si no hay sesión, esperar a SIGNED_OUT
         return;
       }
+      
       if (event === 'SIGNED_IN') {
-        await updateUserData(session, true);
+        console.log('✅ Usuario logueado');
+        if (session && isMounted) {
+          await updateUserData(session, true);
+        }
       } else if (event === 'TOKEN_REFRESHED') {
-        await updateUserData(session, false);
+        console.log('🔄 Token refrescado');
+        if (session && isMounted) {
+          await updateUserData(session, false);
+        }
       } else if (event === 'SIGNED_OUT') {
+        console.log('🔓 Usuario deslogueado');
         if (isMounted) {
           setUser(null);
           clearProfile();
