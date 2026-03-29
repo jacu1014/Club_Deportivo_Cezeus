@@ -172,64 +172,57 @@ function App() {
 
     const initApp = async () => {
       try {
-        if (isMounted) setLoading(true);
+        // 1. Cargar usuario desde localStorage INMEDIATAMENTE (responsive)
+        const cached = loadProfile();
+        
+        if (cached && isMounted) {
+          setUser(cached);
+          if (!cached.acepta_terminos) fetchLegal();
+          else setLegalText('');
+          isUserLoaded.current = true;
+          setLoading(false);
+        } else {
+          if (isMounted) setLoading(true);
+        }
 
-        // 1. Obtener sesión de Supabase (esperamos a que se restaure)
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          // 2a. HAY SESIÓN: Validar y refrescar token PRIMERO
+        // 2. Validar sesión en paralelo (sin bloquear)
+        setTimeout(async () => {
           try {
-            const { error: refreshError } = await supabase.auth.refreshSession();
-            
-            if (refreshError) {
-              // Token no se puede refrescar → logout
-              console.warn('⚠️ Token expirado y no se puede refrescar');
-              await supabase.auth.signOut();
-              clearProfile();
-              clearRoute();
-              if (isMounted) {
-                setUser(null);
-                setLoading(false);
-                setLegalText('');
-              }
-              return;
-            }
+            const { data: { session } } = await supabase.auth.getSession();
 
-            // Token válido → cargar perfil completo
-            const newSession = await supabase.auth.getSession();
-            if (newSession.data.session) {
-              await updateUserData(newSession.data.session, true);
+            if (session) {
+              // Hay sesión, intentar refrescar token
+              const { data, error: refreshError } = await supabase.auth.refreshSession();
+              
+              if (refreshError || !data.session) {
+                // Token inválido
+                console.warn('⚠️ Token inválido, cerrando sesión');
+                await supabase.auth.signOut();
+                if (isMounted) {
+                  setUser(null);
+                  clearProfile();
+                  clearRoute();
+                }
+              } else if (isMounted) {
+                // Token válido, actualizar perfil
+                await updateUserData(data.session, true);
+              }
+            } else if (!cached && isMounted) {
+              // Sin sesión ni cache
+              setUser(null);
+              clearProfile();
             }
           } catch (err) {
             console.error('Error validando sesión:', err);
-            await supabase.auth.signOut();
-            clearProfile();
-            if (isMounted) {
-              setUser(null);
-              setLoading(false);
-            }
+            // Continuar con cache aunque haya error
+          } finally {
+            if (isMounted) setLoading(false);
           }
-        } else {
-          // 2b. SIN SESIÓN: Cargar desde cache si existe
-          const cached = loadProfile();
-          if (cached && isMounted) {
-            setUser(cached);
-            if (!cached.acepta_terminos) fetchLegal();
-            else setLegalText('');
-          } else if (isMounted) {
-            // Sin sesión ni cache → limpio login
-            setUser(null);
-            setLegalText('');
-          }
-          
-          if (isMounted) setLoading(false);
-        }
+        }, 300); // Delay pequeño para que la UI se renderize primero
       } catch (err) {
         console.error('Error en initApp:', err);
         if (isMounted) {
           setLoading(false);
-          // Mantener cache si hay error
           const cached = loadProfile();
           if (!cached) {
             clearProfile();
