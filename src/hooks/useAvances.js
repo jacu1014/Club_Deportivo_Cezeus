@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 const cacheItems = {};
 
 export const useAvances = (currentUser) => {
+  // Siempre inicializamos con un array vacío para evitar errores de .map()
   const [ciclos, setCiclos] = useState([]);
   const [loadingCiclos, setLoadingCiclos] = useState(true);
 
@@ -18,9 +19,12 @@ export const useAvances = (currentUser) => {
         .order('fecha_inicio', { ascending: false });
       
       if (error) throw error;
+      
+      // Garantizamos que si data es null, se guarde un array vacío
       setCiclos(data || []);
     } catch (err) {
       console.error('Error fetchCiclos:', err.message);
+      setCiclos([]); 
     } finally {
       setLoadingCiclos(false);
     }
@@ -32,14 +36,22 @@ export const useAvances = (currentUser) => {
 
   // 2. Gestión de Ciclos (Crear, Toggle, Eliminar)
   const crearCiclo = async (payload) => {
-    const { data, error } = await supabase
-      .from('ciclos_evaluacion')
-      .insert([payload])
-      .select()
-      .single();
-    if (error) throw error;
-    await fetchCiclos();
-    return data;
+    try {
+      const { data, error } = await supabase
+        .from('ciclos_evaluacion')
+        .insert([payload])
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Actualizamos la lista local inmediatamente después de crear
+      await fetchCiclos();
+      return data;
+    } catch (err) {
+      console.error('Error al crear ciclo:', err.message);
+      throw err;
+    }
   };
 
   const toggleCiclo = async (id, estadoActual) => {
@@ -56,7 +68,7 @@ export const useAvances = (currentUser) => {
       .delete()
       .eq('id', id);
     if (error) throw error;
-    // El refresh se maneja en el componente tras la promesa
+    // Se recomienda llamar a fetchCiclos() en el componente tras esta promesa
   };
 
   // 3. Ítems del Ciclo
@@ -80,10 +92,9 @@ export const useAvances = (currentUser) => {
     }
   }, []);
 
-  // 4. Guardado de Evaluación (Transaccional simulado)
+  // 4. Guardado de Evaluación Completa
   const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas }) => {
     try {
-      // Primero: Insertar Cabecera
       const { data: evalCabecera, error: errCabecera } = await supabase
         .from('evaluaciones_avance')
         .insert([{
@@ -99,7 +110,6 @@ export const useAvances = (currentUser) => {
 
       if (errCabecera) throw errCabecera;
 
-      // Segundo: Insertar Detalles (Items)
       const registrosNotas = Object.entries(notas).map(([itemId, valor]) => ({
         evaluacion_id: evalCabecera.id,
         ciclo_item_id: itemId,
@@ -117,7 +127,7 @@ export const useAvances = (currentUser) => {
     }
   };
 
-  // 5. Observaciones de Seguimiento (Módulo SeguimientoAlumno)
+  // 5. Observaciones de Seguimiento
   const fetchObservaciones = useCallback(async (alumnoId) => {
     const { data, error } = await supabase
       .from('observaciones_seguimiento')
@@ -163,7 +173,7 @@ export const useAvances = (currentUser) => {
       .from('evaluaciones_avance')
       .select(`
         *,
-        usuarios!alumno_id (id, primer_nombre, primer_apellido, foto_url),
+        usuarios:alumno_id (id, primer_nombre, primer_apellido, foto_url),
         evaluaciones_items (*)
       `)
       .eq('ciclo_id', cicloId);
@@ -172,7 +182,7 @@ export const useAvances = (currentUser) => {
   }, []);
 
   const prepararDatosComparativos = (itemsCiclo, evalInicial, evalFinal) => {
-    return itemsCiclo.map(item => {
+    return (itemsCiclo || []).map(item => {
       const notaI = evalInicial?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
       const notaF = evalFinal?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
       return {
