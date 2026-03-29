@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabaseClient';
 const cacheItems = {};
 
 export const useAvances = (currentUser) => {
-  // Siempre inicializamos con un array vacío para evitar errores de .map()
   const [ciclos, setCiclos] = useState([]);
   const [loadingCiclos, setLoadingCiclos] = useState(true);
 
@@ -20,11 +19,13 @@ export const useAvances = (currentUser) => {
       
       if (error) throw error;
       
-      // Garantizamos que si data es null, se guarde un array vacío
-      setCiclos(data || []);
+      const result = data || [];
+      setCiclos(result);
+      return result; // <--- Crítico para que el .then() funcione
     } catch (err) {
       console.error('Error fetchCiclos:', err.message);
       setCiclos([]); 
+      return [];
     } finally {
       setLoadingCiclos(false);
     }
@@ -34,7 +35,7 @@ export const useAvances = (currentUser) => {
     fetchCiclos();
   }, [fetchCiclos]);
 
-  // 2. Gestión de Ciclos (Crear, Toggle, Eliminar)
+  // 2. Gestión de Ciclos
   const crearCiclo = async (payload) => {
     try {
       const { data, error } = await supabase
@@ -44,8 +45,6 @@ export const useAvances = (currentUser) => {
         .single();
         
       if (error) throw error;
-      
-      // Actualizamos la lista local inmediatamente después de crear
       await fetchCiclos();
       return data;
     } catch (err) {
@@ -55,20 +54,44 @@ export const useAvances = (currentUser) => {
   };
 
   const toggleCiclo = async (id, estadoActual) => {
-    const { error } = await supabase
-      .from('ciclos_evaluacion')
-      .update({ activo: !estadoActual })
-      .eq('id', id);
-    if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from('ciclos_evaluacion')
+        .update({ activo: !estadoActual })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      throw err;
+    }
   };
 
   const eliminarCiclo = async (id) => {
-    const { error } = await supabase
-      .from('ciclos_evaluacion')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-    // Se recomienda llamar a fetchCiclos() en el componente tras esta promesa
+    try {
+      // Paso A: Borrar ítems técnicos del ciclo primero (Evita error FK)
+      const { error: errItems } = await supabase
+        .from('ciclos_items')
+        .delete()
+        .eq('ciclo_id', id);
+      
+      if (errItems) throw errItems;
+
+      // Paso B: Borrar el ciclo
+      const { error: errCiclo } = await supabase
+        .from('ciclos_evaluacion')
+        .delete()
+        .eq('id', id);
+      
+      if (errCiclo) throw errCiclo;
+      return true;
+    } catch (err) {
+      console.error('Error al eliminar:', err.message);
+      // Si falla por evaluaciones existentes, lanzamos mensaje amigable
+      if (err.code === '23503') {
+        throw new Error("No puedes eliminar un ciclo que ya tiene evaluaciones registradas.");
+      }
+      throw err;
+    }
   };
 
   // 3. Ítems del Ciclo
@@ -87,12 +110,11 @@ export const useAvances = (currentUser) => {
       cacheItems[cicloId] = data || [];
       return cacheItems[cicloId];
     } catch (err) {
-      console.error('Error getItemsConCategorias:', err.message);
       return [];
     }
   }, []);
 
-  // 4. Guardado de Evaluación Completa
+  // 4. Guardado de Evaluación
   const guardarEvaluacionCompleta = async ({ alumno_id, ciclo_id, tipo, observaciones, notas }) => {
     try {
       const { data: evalCabecera, error: errCabecera } = await supabase
@@ -127,15 +149,20 @@ export const useAvances = (currentUser) => {
     }
   };
 
-  // 5. Observaciones de Seguimiento
+  // 5. Observaciones de Seguimiento (Bitácora)
   const fetchObservaciones = useCallback(async (alumnoId) => {
-    const { data, error } = await supabase
-      .from('observaciones_seguimiento')
-      .select('*')
-      .eq('alumno_id', alumnoId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase
+        .from('observaciones_seguimiento')
+        .select('*')
+        .eq('alumno_id', alumnoId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
   }, []);
 
   const agregarObservacion = async (payload) => {
@@ -167,24 +194,32 @@ export const useAvances = (currentUser) => {
     if (error) throw error;
   };
 
-  // 6. Reportes y Comparativas
+  // 6. Reportes
   const fetchEvaluacionesCiclo = useCallback(async (cicloId) => {
-    const { data, error } = await supabase
-      .from('evaluaciones_avance')
-      .select(`
-        *,
-        usuarios:alumno_id (id, primer_nombre, primer_apellido, foto_url),
-        evaluaciones_items (*)
-      `)
-      .eq('ciclo_id', cicloId);
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase
+        .from('evaluaciones_avance')
+        .select(`
+          *,
+          usuarios:alumno_id (id, primer_nombre, primer_apellido, foto_url),
+          evaluaciones_items (*)
+        `)
+        .eq('ciclo_id', cicloId);
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      return [];
+    }
   }, []);
 
   const prepararDatosComparativos = (itemsCiclo, evalInicial, evalFinal) => {
     return (itemsCiclo || []).map(item => {
-      const notaI = evalInicial?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
-      const notaF = evalFinal?.evaluaciones_items?.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
+      const notasItemsI = evalInicial?.evaluaciones_items || [];
+      const notasItemsF = evalFinal?.evaluaciones_items || [];
+      
+      const notaI = notasItemsI.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
+      const notaF = notasItemsF.find(i => i.ciclo_item_id === item.id)?.calificacion || 0;
+      
       return {
         subject: item.nombre,
         inicial: notaI,

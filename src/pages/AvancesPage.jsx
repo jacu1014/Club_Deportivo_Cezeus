@@ -8,7 +8,7 @@ import SeguimientoAlumno from '../components/SeguimientoAlumno';
 
 export default function AvancesPage({ user }) {
   const {
-    ciclos = [], // Valor por defecto para evitar undefined
+    ciclos = [], 
     loadingCiclos, 
     fetchCiclos,
     crearCiclo, 
@@ -41,7 +41,7 @@ export default function AvancesPage({ user }) {
     }
   }, [user]);
 
-  // 2. Cargar observaciones al seleccionar alumno de forma segura
+  // 2. Cargar observaciones al seleccionar alumno
   useEffect(() => {
     if (!alumnoSeleccionado?.id) return;
     let isMounted = true;
@@ -67,7 +67,7 @@ export default function AvancesPage({ user }) {
     setVista('resumen');
   };
 
-  // Handlers de Notas
+  // Handlers de Notas (Bitácora)
   const handleAgregarNota = async (payload) => {
     try {
       const nueva = await agregarObservacion(payload);
@@ -147,21 +147,28 @@ export default function AvancesPage({ user }) {
       {/* Switch de Vistas */}
       {vista === 'ciclos' && (
         <ListaCiclos
-          ciclos={ciclos}
+          ciclos={ciclos || []}
           loading={loadingCiclos}
           canEvaluar={canEvaluar}
           onCrear={() => setModalCiclo(true)}
           onEvaluar={handleIrAEvaluar}
           onResumen={handleVerResumen}
-          onToggle={(id, activo) => toggleCiclo(id, activo).then(fetchCiclos).catch(e => mostrarToast(e.message, 'error'))}
-          onEliminar={(id, nombre) => 
+          onToggle={(id, activo) => {
+            toggleCiclo(id, activo)
+              .then(() => {
+                mostrarToast(activo ? 'Ciclo cerrado' : 'Ciclo reabierto');
+                fetchCiclos();
+              })
+              .catch(e => mostrarToast(e.message, 'error'));
+          }}
+          onEliminar={(id, nombre) => {
             eliminarCiclo(id)
               .then(() => {
                 mostrarToast(`Ciclo "${nombre}" eliminado`);
                 fetchCiclos();
               })
-              .catch(e => mostrarToast(e.message, 'error'))
-          }
+              .catch(e => mostrarToast(e.message, 'error'));
+          }}
         />
       )}
 
@@ -173,7 +180,7 @@ export default function AvancesPage({ user }) {
           onVolver={() => setVista('ciclos')}
           onGuardado={(msg) => {
             mostrarToast(msg || 'Evaluación guardada');
-            fetchCiclos(); // Refrescar datos
+            fetchCiclos(); 
           }}
         />
       )}
@@ -199,10 +206,11 @@ export default function AvancesPage({ user }) {
         />
       )}
 
-      {/* Modal Crear */}
+      {/* Modal Crear Ciclo */}
       {modalCiclo && (
         <ModalCiclo
           onClose={() => setModalCiclo(false)}
+          currentUser={user}
           onGuardar={async (payload) => {
             try {
               await crearCiclo(payload);
@@ -217,9 +225,8 @@ export default function AvancesPage({ user }) {
   );
 }
 
-// --- Sub-componentes Protegidos ---
+// --- Sub-componentes ---
 function ListaCiclos({ ciclos = [], loading, canEvaluar, onCrear, onEvaluar, onResumen, onToggle, onEliminar }) {
-  // Memoizamos el filtrado para evitar errores si 'ciclos' cambia de forma extraña
   const { activos, inactivos } = useMemo(() => {
     const data = Array.isArray(ciclos) ? ciclos : [];
     return {
@@ -244,7 +251,7 @@ function ListaCiclos({ ciclos = [], loading, canEvaluar, onCrear, onEvaluar, onR
         </div>
       )}
 
-      {!ciclos || ciclos.length === 0 ? (
+      {(!ciclos || ciclos.length === 0) ? (
         <div className="py-20 text-center border-2 border-dashed border-white/10 rounded-[2rem] space-y-3">
           <span className="material-symbols-outlined text-5xl text-slate-700">event_note</span>
           <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">No hay ciclos creados aún</p>
@@ -284,8 +291,8 @@ function ListaCiclos({ ciclos = [], loading, canEvaluar, onCrear, onEvaluar, onR
 function CicloCard({ ciclo, canEvaluar, onEvaluar, onResumen, onToggle, onEliminar }) {
   if (!ciclo) return null;
 
-  // Formateo de fechas seguro
   const formatDate = (dateStr) => {
+    if (!dateStr) return '---';
     try {
       return new Date(dateStr + 'T00:00:00').toLocaleDateString('es-CO', { day:'2-digit', month:'short' });
     } catch (e) { return '---'; }
@@ -306,7 +313,7 @@ function CicloCard({ ciclo, canEvaluar, onEvaluar, onResumen, onToggle, onElimin
             {ciclo.activo ? 'Activo' : 'Cerrado'}
           </span>
           <span className="text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-primary/10 text-primary">
-            {ciclo.categoria || 'Sin Cat.'}
+             {Array.isArray(ciclo.categorias_objetivo) ? ciclo.categorias_objetivo[0] : (ciclo.categoria || 'General')}
           </span>
         </div>
       </div>
@@ -320,13 +327,21 @@ function CicloCard({ ciclo, canEvaluar, onEvaluar, onResumen, onToggle, onElimin
         <button onClick={() => onResumen(ciclo)} className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-slate-300 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:text-primary transition-all">
           <span className="material-symbols-outlined text-sm">bar_chart</span> Resumen
         </button>
+        
         {canEvaluar && (
           <>
             <button onClick={() => onToggle(ciclo.id, ciclo.activo)} className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-slate-400 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:text-yellow-400 transition-all">
               <span className="material-symbols-outlined text-sm">{ciclo.activo ? 'lock' : 'lock_open'}</span>
               {ciclo.activo ? 'Cerrar' : 'Reabrir'}
             </button>
-            <button onClick={() => window.confirm(`¿Eliminar "${ciclo.nombre}"?`) && onEliminar(ciclo.id, ciclo.nombre)} className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-slate-600 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:text-rose-400 transition-all">
+            <button 
+              onClick={() => {
+                if(window.confirm(`¿Estás seguro de eliminar "${ciclo.nombre}"? Esta acción borrará también la configuración técnica del ciclo.`)) {
+                  onEliminar(ciclo.id, ciclo.nombre);
+                }
+              }} 
+              className="flex items-center gap-1.5 bg-white/5 border border-white/10 text-slate-600 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:text-rose-400 transition-all"
+            >
               <span className="material-symbols-outlined text-sm">delete</span>
             </button>
           </>
